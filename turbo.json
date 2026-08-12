@@ -22,7 +22,8 @@
     "COOKIE_DOMAIN",
     "WEB_ORIGIN",
     "WEB_PORT",
-    "NEXT_PUBLIC_API_URL"
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_SITE_ENV"
   ],
   "tasks": {
     "build": {

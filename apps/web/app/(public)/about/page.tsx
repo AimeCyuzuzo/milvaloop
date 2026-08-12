@@ -5,9 +5,24 @@ import { Button } from '@milvaloop/ui/button';
 import { Typography } from '@milvaloop/ui/typography';
 import { siteConfig } from '@/lib/site-config';
 
+const TITLE = 'About';
+const DESCRIPTION = `Why ${siteConfig.name} exists and what we believe a cooperative platform should do.`;
+
 export const metadata: Metadata = {
-  title: 'About',
-  description: `Why ${siteConfig.name} exists and what we believe a cooperative platform should do.`,
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: {
+    canonical: '/about',
+  },
+  openGraph: {
+    url: '/about',
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function AboutPage() {
@@ -35,6 +50,18 @@ export default function AboutPage() {
         <Typography variant="muted">
           We believe a cooperative that can explain itself is a stronger, more transparent cooperative.
           That belief shapes everything we build.
+        </Typography>
+        <Typography variant="muted">
+          {siteConfig.name} is built and operated by{' '}
+          <a
+            href={siteConfig.parentOrg.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline underline-offset-4 hover:text-foreground"
+          >
+            {siteConfig.parentOrg.name}
+          </a>
+          .
         </Typography>
       </div>
 

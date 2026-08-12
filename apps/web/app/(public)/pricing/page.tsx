@@ -7,9 +7,24 @@ import { Badge } from '@milvaloop/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader, CardDescription } from '@milvaloop/ui/card';
 import { Typography } from '@milvaloop/ui/typography';
 
+const TITLE = 'Pricing';
+const DESCRIPTION = 'Try MilvaLoop free for 2 months, then pick the plan that fits your cooperative.';
+
 export const metadata: Metadata = {
-  title: 'Pricing',
-  description: 'Try MilvaLoop free for 2 months, then pick the plan that fits your cooperative.',
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: {
+    canonical: '/pricing',
+  },
+  openGraph: {
+    url: '/pricing',
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 const PLANS = [
