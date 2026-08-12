@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 
 import { Providers } from './providers';
+import { siteConfig } from '@/lib/site-config';
 
 const geistSans = localFont({
   src: './fonts/GeistVF.woff',
@@ -14,8 +15,23 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'MilvaLoop',
-  description: 'Cooperative management platform',
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    template: `%s — ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
+  openGraph: {
+    type: 'website',
+    siteName: siteConfig.name,
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+  },
 };
 
 export default function RootLayout({
