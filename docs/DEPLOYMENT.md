@@ -44,10 +44,15 @@ pnpm docker:dev   # start the infra containers
 pnpm dev          # run apps/web and services/main
 ```
 
-Ports are non-default by convention in this repo (`WEB_PORT=5330`,
-backend `PORT=5331`, `MINIO_PORT=5332` in `.env.example`) — see that file for
-the authoritative current list, and `turbo.json`'s `globalEnv` for the full
-set of variables Turborepo is aware of.
+Ports are non-default by convention in this repo, assigned sequentially
+starting at 5330 (`WEB_PORT=5330`, backend `PORT=5331`, Postgres on `5333`
+via `DATABASE_URL`, `MINIO_PORT=5334`, Redis on `5335` via `REDIS_URL`) —
+this keeps per-project data stores from colliding when several of this
+machine's projects run locally at once. Mailpit is the deliberate exception,
+left on its default ports (`1025`/`8025`) so dev email from every project
+lands in one shared inbox instead of a separate Mailpit per project. See
+`.env.example` for the authoritative current list, and `turbo.json`'s
+`globalEnv` for the full set of variables Turborepo is aware of.
 
 ### Staging (current, interim)
 
