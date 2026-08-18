@@ -12,6 +12,14 @@ Plain-markdown documentation for the MilvaLoop platform.
 
 - [Deployment](./DEPLOYMENT.md) — current and target deployment setup, environments,
   and the pre-launch checklist.
+- [Project setup guide](./PROJECT_SETUP_GUIDE.md) — the default reference for
+  how this project is set up: stack, repo layout, config, Docker, state
+  management, caching, ORM, auth/authz, rate limiting, testing, and more.
+- [AI development guidelines](./AI_GUIDELINES.md) — behavioral rules for an
+  AI assistant working in this codebase: never committing/pushing or running
+  sensitive commands without an explicit go-ahead, asking instead of
+  inventing when something's ambiguous, component/UI reuse discipline, and
+  verifying before claiming a change is done.
 
 Repository-wide development rules live under [`.agents/rules/`](../.agents/rules/):
 [`MAIN.md`](../.agents/rules/MAIN.md) (overview, layout, workflow),
