@@ -3,3 +3,5 @@ export * from './users.js';
 export * from './memberships.js';
 export * from './sessions.js';
 export * from './magic-link-tokens.js';
+export * from './email-verification-tokens.js';
+export * from './password-reset-tokens.js';
