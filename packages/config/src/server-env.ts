@@ -21,6 +21,11 @@ export const serverEnvSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  // Signs short-lived tickets (e.g. "pick a cooperative after login") that
+  // prove identity without being a real access/refresh token — kept on its
+  // own secret so one can never be mistaken for the other even if a
+  // purpose-claim check were ever skipped somewhere.
+  AUTH_TICKET_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL: z.string().default('30d'),
 
