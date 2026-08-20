@@ -30,7 +30,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <Button variant="ghost" asChild>
-            <Link href="/login">Sign in</Link>
+            <Link href="/auth/login">Sign in</Link>
           </Button>
           <Button asChild>
             <Link href="/pricing">Start free trial</Link>

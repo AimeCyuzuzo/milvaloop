@@ -128,7 +128,7 @@ export default function PricingPage() {
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant={plan.highlighted ? 'default' : 'outline'} asChild>
-                <Link href={plan.name === 'Enterprise' ? '/about' : '/signup'}>{plan.cta}</Link>
+                <Link href={plan.name === 'Enterprise' ? '/about' : '/auth/signup'}>{plan.cta}</Link>
               </Button>
             </CardFooter>
           </Card>

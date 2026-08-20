@@ -67,7 +67,7 @@ export default function HomePage() {
         </Typography>
         <div className="mt-8 flex items-center justify-center gap-3">
           <Button size="lg" asChild>
-            <Link href="/signup">Start your free 2-month trial</Link>
+            <Link href="/auth/signup">Start your free 2-month trial</Link>
           </Button>
           <Button size="lg" variant="outline" asChild>
             <Link href="/about">Learn more</Link>
