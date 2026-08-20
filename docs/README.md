@@ -20,6 +20,9 @@ Plain-markdown documentation for the MilvaLoop platform.
   sensitive commands without an explicit go-ahead, asking instead of
   inventing when something's ambiguous, component/UI reuse discipline, and
   verifying before claiming a change is done.
+- [Backlog](./BACKLOG.md) — work deliberately deferred during a change
+  rather than skipped without a record (invites, Redis-backed rate
+  limiting, and other items pushed to later).
 
 Repository-wide development rules live under [`.agents/rules/`](../.agents/rules/):
 [`MAIN.md`](../.agents/rules/MAIN.md) (overview, layout, workflow),

@@ -67,16 +67,45 @@ bug in one of them — fix the drift, don't just work around it.
 - Sessions/refresh tokens are stored server-side as a hash of the token, never
   the raw value (mirrors how passwords are handled).
 - Least privilege: a member's `permissions` array (see the auth/tenancy
-  design) determines exactly what they can do — check it on the backend on
-  every protected route; never rely on the frontend hiding a button as the
-  actual control.
-- Rate-limit authentication endpoints (login, magic-link request, signup)
-  before they're exposed to real traffic — this is explicitly deferred from
-  the very first implementation pass but must land before any non-trusted
-  user can reach these endpoints.
+  design) determines exactly what they can do. The enforcement mechanism is
+  `PermissionsGuard` + `@RequirePermissions(...)` (`services/main/src/auth/`)
+  — every protected route uses it; never rely on the frontend hiding a
+  button as the actual control.
+- Authentication endpoints (login, magic-link request, signup) are
+  rate-limited per route via `@nestjs/throttler` (see `AuthController`) —
+  keep this in place, and give any new auth-adjacent endpoint the same
+  treatment rather than relying on the global default limit alone.
 - Never leak whether an email/account exists through response differences
   (e.g. "magic link requested" always returns success, whether or not that
   email has an account).
+
+## Testing
+
+- **Runner by package type.** `services/main` (NestJS) uses Jest — Nest's
+  dependency injection relies on TypeScript's `emitDecoratorMetadata`, which
+  only a real TS compiler produces, so Jest there always runs through
+  ts-jest, never Babel-only. Plain TypeScript packages (`packages/*`) use
+  Vitest — zero-config ESM/TS support, no reason to fight ts-jest's
+  NodeNext-vs-CommonJS quirks for code with no decorators to preserve.
+- **Unit tests** are colocated `*.spec.ts` files next to the code they test.
+  Cover pure logic (Zod schemas, token/hash helpers, guards, pipes) here —
+  fast, no infrastructure required.
+- **Integration tests** for anything that touches the database live in
+  `services/main/test/*.e2e-spec.ts` and run against a real Postgres via
+  `@milvaloop/db/testing`'s `createTestDatabase()` (a fresh, uniquely-named
+  database per test file, migrated for real, dropped on teardown) —
+  **never mock the query builder.** A mocked `db.select().where(...)` chain
+  cannot catch a wrong constraint name, a bad migration, or a real SQL error
+  — exactly the class of bug this module's tests were built to catch. Use
+  `resetDatabase()` between test cases within a file. Requires
+  `pnpm docker:dev` running locally.
+- **Rate-limited routes** get their own dedicated e2e file (see
+  `auth-rate-limit.e2e-spec.ts`) rather than being mixed into the main
+  functional suite — `ThrottlerModule` would otherwise throttle the many
+  fast requests other tests make against the same routes.
+- `pnpm test` / `pnpm test:e2e` at the repo root run every package's suite
+  via Turborepo; both must pass for every package touched (see MAIN.md's
+  verification rule) before a change is done.
 
 ## Self-hosted stack
 

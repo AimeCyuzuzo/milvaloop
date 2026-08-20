@@ -122,7 +122,6 @@ then, for any deploy:
   section).
 - Automated database backups and a tested restore procedure.
 - Real SMTP provider account.
-- Rate limiting on public-facing endpoints, especially auth.
 
 None of these block using the product privately with family/friends on the
 current interim setup — they block onboarding any real, unrelated cooperative.

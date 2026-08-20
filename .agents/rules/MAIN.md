@@ -69,14 +69,19 @@ lower engineering standards; see `CODE_QUALITY.md`.
 
 ## Reserved slugs
 
-Cooperative (tenant) slugs are user-chosen but must never collide with a
+Cooperative (tenant) slugs are generated automatically from the cooperative
+name a user chooses (see `AuthService.insertTenantAndMembership`/
+`previewCooperativeSlug` and `packages/types/src/tenant.ts`'s `slugify`) —
+never typed or edited directly. A generated slug must never collide with a
 system route, subdomain, or a name that could be confused for an official
-MilvaLoop/MilvaLabs surface. Reject at signup, case-insensitively: `www`,
-`api`, `app`, `admin`, `auth`, `login`, `logout`, `signup`, `signin`,
-`register`, `dashboard`, `settings`, `account`, `billing`, `help`, `support`,
-`status`, `docs`, `blog`, `about`, `pricing`, `contact`, `terms`, `privacy`,
-`legal`, `mail`, `email`, `ftp`, `assets`, `static`, `public`, `milvaloop`,
-`milvalabs`, `null`, `undefined`, `test`. Keep this list in one place in code
+MilvaLoop/MilvaLabs surface; when it would, the generator skips to a
+disambiguated candidate (`<slug>-2`, `<slug>-3`, ...) rather than rejecting
+the name. Reject case-insensitively: `www`, `api`, `app`, `admin`, `auth`,
+`login`, `logout`, `signup`, `signin`, `register`, `dashboard`, `settings`,
+`account`, `billing`, `help`, `support`, `status`, `docs`, `blog`, `about`,
+`pricing`, `contact`, `terms`, `privacy`, `legal`, `mail`, `email`, `ftp`,
+`assets`, `static`, `public`, `milvaloop`, `milvalabs`, `null`, `undefined`,
+`test`. Keep this list in one place in code
 (`packages/types`) so it is validated identically wherever a slug is accepted.
 
 ## Terminology
@@ -100,6 +105,10 @@ pnpm dev                        # run every app/service in dev mode
 pnpm build                      # build every app/service
 pnpm check-types                # typecheck the whole workspace
 pnpm lint                       # lint the whole workspace
+pnpm test                       # unit tests for the whole workspace
+pnpm test:e2e                   # integration tests (needs pnpm docker:dev running)
+pnpm db:generate                # generate a Drizzle migration from packages/db's schema
+pnpm db:migrate                 # apply pending migrations (needs pnpm docker:dev running)
 ```
 
 `pnpm dev` and `pnpm build` load the repo-root `.env` (via `dotenv-cli`) before
@@ -136,9 +145,11 @@ running Turborepo — see `.env.example` for the full variable list. Copy it to
 
 ## Verification before claiming completion
 
-Before saying a change is done: typecheck, lint, and the relevant build(s)
-must pass for every package touched, **plus a real end-to-end check of the
-flow you changed** — not just "it compiles." Concretely:
+Before saying a change is done: typecheck, lint, the relevant build(s), and
+`pnpm test`/`pnpm test:e2e` must pass for every package touched (see
+`CODE_QUALITY.md`'s Testing section for what belongs in which), **plus a
+real end-to-end check of the flow you changed** — not just "it compiles."
+Concretely:
 - Auth/email flows: exercise the actual path against Mailpit
   (`http://localhost:8025`) — request the email, click/use the real link, confirm
   the redirect and resulting session, not just that an endpoint returns 200.
