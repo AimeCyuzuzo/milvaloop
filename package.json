@@ -7,8 +7,12 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
     "docker:dev": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "db:generate": "pnpm --filter @milvaloop/db db:generate",
+    "db:migrate": "pnpm --filter @milvaloop/db db:migrate"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",

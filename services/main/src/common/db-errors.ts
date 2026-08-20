@@ -15,18 +15,26 @@ export function isUniqueViolation(
   error: unknown,
   constraintName: string,
 ): boolean {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-  const pgError = error as PostgresErrorLike;
-  if (
-    pgError.code === UNIQUE_VIOLATION &&
-    pgError.constraint_name === constraintName
+  const seen = new Set<unknown>();
+  let current = error;
+
+  // Walk the .cause chain iteratively rather than recursively — a cyclic
+  // (even self-referencing) .cause would otherwise recurse forever.
+  while (
+    typeof current === 'object' &&
+    current !== null &&
+    !seen.has(current)
   ) {
-    return true;
+    seen.add(current);
+    const pgError = current as PostgresErrorLike;
+    if (
+      pgError.code === UNIQUE_VIOLATION &&
+      pgError.constraint_name === constraintName
+    ) {
+      return true;
+    }
+    current = pgError.cause;
   }
-  return (
-    pgError.cause !== undefined &&
-    isUniqueViolation(pgError.cause, constraintName)
-  );
+
+  return false;
 }
