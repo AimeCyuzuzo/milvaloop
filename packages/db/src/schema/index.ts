@@ -5,3 +5,5 @@ export * from './sessions.js';
 export * from './magic-link-tokens.js';
 export * from './email-verification-tokens.js';
 export * from './password-reset-tokens.js';
+export * from './membership-invites.js';
+export * from './audit-events.js';
