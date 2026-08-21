@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 
 import { CenteredShell } from '@/components/layout/centered-shell';
 
+import { AuthGate } from './_components/auth-gate';
+
 // Every page under here is a Client Component (react-hook-form, hooks), so
 // none can export its own metadata — this is a placeholder default rather
 // than the marketing homepage's tagline until they're split into a
@@ -12,5 +14,9 @@ export const metadata: Metadata = {
 };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <CenteredShell>{children}</CenteredShell>;
+  return (
+    <CenteredShell>
+      <AuthGate>{children}</AuthGate>
+    </CenteredShell>
+  );
 }
