@@ -102,7 +102,11 @@ describe('Auth (e2e)', () => {
         `No email with subject containing "${subjectContains}" was sent`,
       );
     }
-    const match = /token=([a-f0-9]+)/.exec(email.text ?? '');
+    // The link's visible label is an action verb ("Sign in"), not the raw
+    // URL, so the token only appears in the HTML anchor's href — not in the
+    // plain-text body, which is what a real mail client's rendered view
+    // (and a user clicking the button) actually follows.
+    const match = /token=([a-f0-9]+)/.exec(email.html ?? '');
     if (!match) {
       throw new Error('No token found in email body');
     }

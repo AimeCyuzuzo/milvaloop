@@ -7,7 +7,13 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { and, eq, gt, schema, type Database } from '@milvaloop/db';
-import type { Mailer } from '@milvaloop/email';
+import {
+  EmailVerificationEmail,
+  MagicLinkEmail,
+  PasswordResetEmail,
+  renderEmail,
+  type Mailer,
+} from '@milvaloop/email';
 import {
   isReservedSlug,
   PERMISSIONS,
@@ -290,16 +296,12 @@ export class AuthService {
     });
 
     const loginUrl = `${env.WEB_ORIGIN}/auth/magic-link?token=${rawToken}`;
+    const { html, text } = await renderEmail(MagicLinkEmail({ loginUrl }));
     // Caught rather than thrown: an SMTP failure here must not turn into a
     // response difference between "account exists" and "account doesn't" —
     // that would reopen the enumeration gap this endpoint exists to close.
     await this.mailer
-      .send({
-        to: user.email,
-        subject: 'Sign in to MilvaLoop',
-        html: `<p>Click the link below to sign in to MilvaLoop.</p><p><a href="${loginUrl}">${loginUrl}</a></p><p>This link expires in 15 minutes and can only be used once. If you didn't request it, ignore this email.</p>`,
-        text: `Sign in to MilvaLoop: ${loginUrl}\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, ignore this email.`,
-      })
+      .send({ to: user.email, subject: 'Sign in to MilvaLoop', html, text })
       .catch((error: unknown) => {
         this.logger.error(
           `Failed to send magic-link email to user ${user.id}`,
@@ -426,12 +428,13 @@ export class AuthService {
     });
 
     const resetUrl = `${env.WEB_ORIGIN}/auth/reset-password?token=${rawToken}`;
+    const { html, text } = await renderEmail(PasswordResetEmail({ resetUrl }));
     await this.mailer
       .send({
         to: user.email,
         subject: 'Reset your MilvaLoop password',
-        html: `<p>Click the link below to set a new password for your MilvaLoop account.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 1 hour and can only be used once. If you didn't request it, ignore this email — your password hasn't been changed.</p>`,
-        text: `Reset your MilvaLoop password: ${resetUrl}\n\nThis link expires in 1 hour and can only be used once. If you didn't request it, ignore this email — your password hasn't been changed.`,
+        html,
+        text,
       })
       .catch((error: unknown) => {
         this.logger.error(
@@ -833,11 +836,14 @@ export class AuthService {
     });
 
     const verifyUrl = `${env.WEB_ORIGIN}/auth/verify-email?token=${rawToken}`;
+    const { html, text } = await renderEmail(
+      EmailVerificationEmail({ tenantName: tenant.name, verifyUrl }),
+    );
     await this.mailer.send({
       to: user.email,
       subject: `Verify your email for ${tenant.name}`,
-      html: `<p>Click the link below to verify your email address for <strong>${tenant.name}</strong> on MilvaLoop.</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create this account, ignore this email.</p>`,
-      text: `Verify your email for ${tenant.name}: ${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create this account, ignore this email.`,
+      html,
+      text,
     });
   }
 

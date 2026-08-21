@@ -1,5 +1,5 @@
 {
-  "extends": "@milvaloop/typescript-config/base.json",
+  "extends": "@milvaloop/typescript-config/react-library.json",
   "compilerOptions": {
     "outDir": "dist"
   },

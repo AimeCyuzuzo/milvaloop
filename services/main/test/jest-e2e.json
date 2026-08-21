@@ -15,6 +15,7 @@
   },
   "moduleNameMapper": {
     "^@milvaloop/db/testing$": "<rootDir>/../../../packages/db/dist/testing.js",
-    "^@milvaloop/([^/]+)$": "<rootDir>/../../../packages/$1/dist/index.js"
+    "^@milvaloop/([^/]+)$": "<rootDir>/../../../packages/$1/dist/index.js",
+    "^@react-email/render$": "<rootDir>/fakes/fake-react-email-render.ts"
   }
 }
