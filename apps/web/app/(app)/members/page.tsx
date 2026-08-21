@@ -1,0 +1,39 @@
+'use client';
+
+import { PERMISSIONS } from '@milvaloop/types';
+
+import { DataTable } from '@milvaloop/ui/data-table';
+import { Skeleton } from '@milvaloop/ui/skeleton';
+
+import { useHasPermission } from '@/lib/auth/use-permissions';
+import { useMembersQuery } from '@/lib/members/use-members-query';
+
+import { memberColumns } from './_components/columns';
+import { InviteMemberDialog } from './_components/invite-member-dialog';
+
+// The page title/description live in the app shell's top bar (see
+// AppLayout + page-headers.ts), not here — this page only owns its content.
+export default function MembersPage() {
+  const { data, isPending } = useMembersQuery();
+  const canInvite = useHasPermission(PERMISSIONS.MEMBERS_INVITE);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {canInvite ? (
+        <div className="flex justify-end">
+          <InviteMemberDialog />
+        </div>
+      ) : null}
+
+      {isPending ? (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+        <DataTable columns={memberColumns} data={data?.members ?? []} filterPlaceholder="Search members…" />
+      )}
+    </div>
+  );
+}

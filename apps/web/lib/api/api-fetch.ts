@@ -13,6 +13,19 @@ export class ApiError extends Error {
   }
 }
 
+// For call sites that just need a message to show (a confirm-dialog action,
+// a toast) rather than binding field-level errors onto a form — see
+// apply-server-error.ts's applyServerError for that case instead.
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.body as { message?: string } | null;
+    if (body?.message) {
+      return body.message;
+    }
+  }
+  return 'Something went wrong. Please try again.';
+}
+
 export interface ApiFetchOptions extends RequestInit {
   /** Skip attaching the access token / attempting a refresh (e.g. login, refresh itself). */
   skipAuth?: boolean;

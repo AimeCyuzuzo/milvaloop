@@ -45,11 +45,12 @@ function useIssueSessionMutation<TInput>(path: string) {
   });
 }
 
-// login and magic-link/consume return a union — the cooperative isn't known
+// login, magic-link/consume, and (see use-members-mutations.ts)
+// invites/accept all return this same union — the cooperative isn't known
 // yet if there's more than one, so only the 'authenticated' branch writes
 // to the session cache. The page itself handles the other two branches (it
 // needs the ticket/cooperative list to render a picker).
-function useLoginResultMutation<TInput>(path: string) {
+export function useLoginResultMutation<TInput>(path: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
