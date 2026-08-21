@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
-import { Typography } from '@milvaloop/ui/typography';
-
-import { siteConfig } from '@/lib/site-config';
+import { CenteredShell } from '@/components/layout/centered-shell';
 
 // Every page under here is a Client Component (react-hook-form, hooks), so
 // none can export its own metadata — this is a placeholder default rather
@@ -15,12 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-12">
-      <Link href="/">
-        <Typography variant="large">{siteConfig.name}</Typography>
-      </Link>
-      <div className="w-full max-w-sm">{children}</div>
-    </div>
-  );
+  return <CenteredShell>{children}</CenteredShell>;
 }
