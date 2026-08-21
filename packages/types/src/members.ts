@@ -3,16 +3,19 @@ import { z } from 'zod';
 import { passwordSchema } from './auth.js';
 import { PERMISSIONS, type Permission } from './permissions.js';
 
-const NON_ADMIN_PERMISSIONS = Object.values(PERMISSIONS).filter(
+// TENANT_ADMIN is deliberately excluded — granting full admin access is a
+// separate, more deliberate action than the default invite/edit-permissions
+// flow this backs (see docs/plans/members-management.md). No "promote to
+// admin" flow exists yet; when one is built, it needs its own endpoint,
+// not a checkbox added here. Exported (not just used to build the schema
+// below) so the frontend's permission checklist draws from the same list
+// rather than re-deriving it.
+export const GRANTABLE_PERMISSIONS = Object.values(PERMISSIONS).filter(
   (permission) => permission !== PERMISSIONS.TENANT_ADMIN,
 ) as Exclude<Permission, typeof PERMISSIONS.TENANT_ADMIN>[];
 
-// TENANT_ADMIN is deliberately excluded — granting full admin access is a
-// separate, more deliberate action than the default invite/edit-permissions
-// flow this schema backs (see docs/plans/members-management.md). No
-// "promote to admin" flow exists yet; when one is built, it needs its own
-// endpoint outside this schema, not a checkbox added here.
-export const grantablePermissionSchema = z.enum(NON_ADMIN_PERMISSIONS);
+export const grantablePermissionSchema = z.enum(GRANTABLE_PERMISSIONS);
+export type GrantablePermission = z.infer<typeof grantablePermissionSchema>;
 
 // POST /members/invite
 export const inviteMemberSchema = z.object({
