@@ -51,12 +51,20 @@ describe('PermissionsGuard', () => {
 
   it('denies the request when it is missing even one of several required permissions', () => {
     const { reflector, context } = contextWithAuth(
-      { permissions: ['tenant:admin'] },
-      ['tenant:admin', 'other'],
+      { permissions: ['members:invite'] },
+      ['members:invite', 'other'],
     );
     expect(() => new PermissionsGuard(reflector).canActivate(context)).toThrow(
       ForbiddenException,
     );
+  });
+
+  it('allows the request when the membership has tenant:admin, regardless of what specific permissions are required', () => {
+    const { reflector, context } = contextWithAuth(
+      { permissions: ['tenant:admin'] },
+      ['members:invite', 'members:remove'],
+    );
+    expect(new PermissionsGuard(reflector).canActivate(context)).toBe(true);
   });
 
   it('denies by default when request.auth is missing entirely (no AccessTokenGuard ran)', () => {
