@@ -8,6 +8,8 @@ import {
   Param,
   Patch,
   Post,
+  Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -15,22 +17,25 @@ import { Throttle } from '@nestjs/throttler';
 import {
   acceptInviteSchema,
   inviteMemberSchema,
+  inviteTokenParamSchema,
   membershipIdParamSchema,
   membershipInviteIdParamSchema,
   updateMemberPermissionsSchema,
   PERMISSIONS,
   type AcceptInviteInput,
   type InviteMemberInput,
+  type InviteTokenParam,
   type LoginResult,
   type MembershipIdParam,
   type MembershipInviteIdParam,
   type UpdateMemberPermissionsInput,
 } from '@milvaloop/types';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { toLoginResponse } from '../auth/login-response';
+import { readRefreshCookie, setRefreshCookie } from '../auth/refresh-cookie';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -114,9 +119,46 @@ export class MembersController {
     );
   }
 
-  // Public — the invitee may not have a session, or even an account, yet.
-  // The token itself is unguessable (256 bits), but still throttled to slow
-  // down scripted abuse, same reasoning as magic-link/consume.
+  // Public, read-only — never consumes the invite, so it's safe for the
+  // frontend to call on every load/reload of the accept page (see
+  // docs/plans/invite-accept-rework.md). Same throttle tier as
+  // magic-link/consume: arbitrary user input, no session required.
+  @Throttle({ default: { limit: 10, ttl: 900_000 } })
+  @Get('invites/lookup')
+  async lookupInvite(
+    @Query(new ZodValidationPipe(inviteTokenParamSchema))
+    query: InviteTokenParam,
+  ) {
+    return this.membersService.lookupInvite(query.token);
+  }
+
+  // Authenticated — the invitee already has a session; this only ever adds
+  // a membership to *that* account (see MembersService.joinViaInvite).
+  // Same convention as /auth/cooperatives/switch: identity is already
+  // proven, no extra throttle beyond the global default.
+  @Post('invites/:token/join')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  async joinViaInvite(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(inviteTokenParamSchema))
+    params: InviteTokenParam,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { session, refreshToken, refreshTokenExpiresAt } =
+      await this.membersService.joinViaInvite(
+        claims,
+        params.token,
+        readRefreshCookie(req),
+      );
+    setRefreshCookie(res, refreshToken, refreshTokenExpiresAt);
+    return session;
+  }
+
+  // Public — reached only once lookup reports hasAccount: false. The token
+  // itself is unguessable (256 bits), but still throttled to slow down
+  // scripted abuse, same reasoning as magic-link/consume.
   @Throttle({ default: { limit: 10, ttl: 900_000 } })
   @Post('invites/accept')
   @HttpCode(HttpStatus.OK)

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -11,6 +12,7 @@ import { InviteEmail, renderEmail, type Mailer } from '@milvaloop/email';
 import {
   PERMISSIONS,
   type AcceptInviteInput,
+  type InviteLookupResult,
   type InviteMemberInput,
   type MemberListResponse,
   type PendingInvite,
@@ -22,7 +24,12 @@ import { isUniqueViolation } from '../common/db-errors';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import { MAILER } from '../email/mailer.module';
-import { AuthService, type LoginOutcome } from '../auth/auth.service';
+import type { AccessTokenClaims } from '../auth/auth.guard';
+import {
+  AuthService,
+  type IssuedSession,
+  type LoginOutcome,
+} from '../auth/auth.service';
 import { generateOpaqueToken, hashToken, parseTtlMs } from '../auth/tokens';
 
 const { memberships, membershipInvites, tenants, users } = schema;
@@ -349,6 +356,133 @@ export class MembersService {
     });
   }
 
+  // Read-only, never consumes the invite — safe to call on every page
+  // load/reload (see docs/plans/invite-accept-rework.md). This is what lets
+  // /invite/accept show a clean status instead of erroring on a repeat
+  // visit, and what a future notifications/workspace-selection surface
+  // would read from.
+  async lookupInvite(token: string): Promise<InviteLookupResult> {
+    const [invite] = await this.db
+      .select()
+      .from(membershipInvites)
+      .where(eq(membershipInvites.tokenHash, hashToken(token)))
+      .limit(1);
+    if (!invite) {
+      return { status: 'invalid' };
+    }
+    if (invite.consumedAt) {
+      return { status: 'consumed' };
+    }
+    if (invite.expiresAt < new Date()) {
+      return { status: 'expired' };
+    }
+
+    const [tenant] = await this.db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, invite.tenantId))
+      .limit(1);
+    const [existingUser] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, invite.email))
+      .limit(1);
+
+    return {
+      status: 'pending',
+      email: invite.email,
+      tenantName: tenant.name,
+      hasAccount: !!existingUser,
+    };
+  }
+
+  // Authenticated path — the caller already proved their own identity, so
+  // this only ever adds a membership to *that* account, never anyone
+  // else's. Requires the invite's email to match the caller's own (see
+  // docs/plans/invite-accept-rework.md — this is what replaced the old
+  // "invite link as proof of identity" behavior for existing accounts).
+  async joinViaInvite(
+    claims: AccessTokenClaims,
+    token: string,
+    rawRefreshToken: string | undefined,
+  ): Promise<IssuedSession> {
+    const invalid = () =>
+      new BadRequestException('This invite is invalid or has expired');
+
+    const tokenHash = hashToken(token);
+    const [invite] = await this.db
+      .select()
+      .from(membershipInvites)
+      .where(eq(membershipInvites.tokenHash, tokenHash))
+      .limit(1);
+    if (!invite || invite.consumedAt || invite.expiresAt < new Date()) {
+      throw invalid();
+    }
+    if (invite.email !== claims.email) {
+      throw new ForbiddenException(
+        `This invite was sent to ${invite.email}, not ${claims.email}`,
+      );
+    }
+
+    await this.db.transaction(async (tx) => {
+      const [reloaded] = await tx
+        .select()
+        .from(membershipInvites)
+        .where(
+          and(
+            eq(membershipInvites.id, invite.id),
+            isNull(membershipInvites.consumedAt),
+          ),
+        )
+        .limit(1);
+      if (!reloaded) {
+        throw invalid();
+      }
+
+      try {
+        await tx.insert(memberships).values({
+          userId: claims.sub,
+          tenantId: invite.tenantId,
+          permissions: invite.permissions,
+        });
+      } catch (error) {
+        if (isUniqueViolation(error, 'memberships_user_id_tenant_id_unique')) {
+          throw new ConflictException(
+            'You are already a member of this cooperative',
+          );
+        }
+        throw error;
+      }
+
+      await tx
+        .update(membershipInvites)
+        .set({ consumedAt: new Date() })
+        .where(eq(membershipInvites.id, invite.id));
+
+      await this.auditLog.record(tx, {
+        tenantId: invite.tenantId,
+        actorUserId: claims.sub,
+        action: 'member.invite_accepted',
+        entityType: 'membership_invite',
+        entityId: invite.id,
+        metadata: { email: invite.email },
+      });
+    });
+
+    // Reuses switchCooperative as-is: the membership now exists, so it just
+    // confirms that, rotates the refresh session, and issues one scoped to
+    // the tenant just joined.
+    return this.authService.switchCooperative(
+      claims,
+      { cooperativeId: invite.tenantId },
+      rawRefreshToken,
+    );
+  }
+
+  // Public, no session — only ever reached once lookupInvite reports
+  // hasAccount: false. password is always required now (see
+  // acceptInviteSchema); an existing-account invitee goes through
+  // joinViaInvite instead.
   async acceptInvite(input: AcceptInviteInput): Promise<LoginOutcome> {
     const invalid = () =>
       new BadRequestException('This invite is invalid or has expired');
@@ -362,12 +496,6 @@ export class MembersService {
     if (!invite || invite.consumedAt || invite.expiresAt < new Date()) {
       throw invalid();
     }
-
-    const [existingUser] = await this.db
-      .select()
-      .from(users)
-      .where(eq(users.email, invite.email))
-      .limit(1);
 
     const user = await this.db.transaction(async (tx) => {
       const [reloaded] = await tx
@@ -384,27 +512,36 @@ export class MembersService {
         throw invalid();
       }
 
-      let targetUser = existingUser;
-      if (!targetUser) {
-        if (!input.password) {
-          throw new BadRequestException(
-            'A password is required to accept this invite',
-          );
-        }
-        const passwordHash = await argon2.hash(input.password);
-        // Accepting an invite emailed to this exact address is itself proof
-        // of ownership — no separate verification round-trip needed, unlike
-        // a self-serve signup where nothing yet ties the email to the
-        // person clicking through.
-        [targetUser] = await tx
-          .insert(users)
-          .values({
-            email: invite.email,
-            passwordHash,
-            emailVerifiedAt: new Date(),
-          })
-          .returning();
+      // A narrow but real race: an account could have been created for
+      // this email between the frontend's lookup call and this submit
+      // (e.g. the invitee signed up separately in another tab). Rejecting
+      // outright — rather than silently logging in as that account, the
+      // way this endpoint used to — is the whole point of this rework: an
+      // invite link is authorization to join, not proof of identity.
+      const [existingUser] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, invite.email))
+        .limit(1);
+      if (existingUser) {
+        throw new ConflictException(
+          'An account with this email already exists — please log in instead',
+        );
       }
+
+      // Accepting an invite emailed to this exact address is itself proof
+      // of ownership — no separate verification round-trip needed, unlike
+      // a self-serve signup where nothing yet ties the email to the
+      // person clicking through.
+      const passwordHash = await argon2.hash(input.password);
+      const [targetUser] = await tx
+        .insert(users)
+        .values({
+          email: invite.email,
+          passwordHash,
+          emailVerifiedAt: new Date(),
+        })
+        .returning();
 
       try {
         await tx.insert(memberships).values({

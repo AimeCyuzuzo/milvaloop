@@ -51,11 +51,13 @@ function extractInviteToken(
   return match[1];
 }
 
-// Exercises the whole Members Management feature: invite, accept (both the
-// existing-user and new-user branches), revoke, edit permissions, remove —
-// and the two correctness guards that matter most (a permissions edit can
-// never silently drop admin status, a removal can never drop the only
-// remaining admin).
+// Exercises the whole Members Management feature: invite, lookup, accept
+// (the no-account case) and join (the already-has-an-account case, see
+// docs/plans/invite-accept-rework.md for why these are two separate
+// endpoints now), revoke, edit permissions, remove — and the two
+// correctness guards that matter most (a permissions edit can never
+// silently drop admin status, a removal can never drop the only remaining
+// admin).
 describe('Members (e2e)', () => {
   let app: INestApplication<App>;
   let testDb: TestDatabase;
@@ -268,7 +270,13 @@ describe('Members (e2e)', () => {
       expect(session.permissions).toEqual(['members:invite']);
     });
 
-    it('adds a membership for an existing user and offers cooperative selection', async () => {
+    // Accepting via this endpoint used to log the invitee straight in if an
+    // account for that email already existed — the invite link acting as
+    // proof of identity, no password check at all. That's gone: this
+    // endpoint is only for the no-account case now (see
+    // docs/plans/invite-accept-rework.md); an existing account goes through
+    // POST /members/invites/:token/join instead, authenticated.
+    it('rejects when an account already exists for the invited email', async () => {
       await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
@@ -288,14 +296,9 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token });
+        .send({ token, password: PASSWORD });
 
-      expect(response.status).toBe(200);
-      const result = bodyAs<{ status: string; cooperatives?: unknown[] }>(
-        response,
-      );
-      expect(result.status).toBe('selection_required');
-      expect(result.cooperatives).toHaveLength(2);
+      expect(response.status).toBe(409);
     });
 
     it('rejects an invalid token', async () => {
@@ -336,6 +339,196 @@ describe('Members (e2e)', () => {
         .post('/members/invites/accept')
         .send({ token, password: PASSWORD });
       expect(second.status).toBe(400);
+    });
+  });
+
+  describe('GET /members/invites/lookup', () => {
+    it('reports a pending invite with no account yet', async () => {
+      const founder = await signupFounder();
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'lookup-new@example.com', permissions: [] });
+      const token = extractInviteToken(sentEmails, 'lookup-new@example.com');
+
+      const response = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'pending',
+        email: 'lookup-new@example.com',
+        tenantName: FOUNDER.tenantName,
+        hasAccount: false,
+      });
+    });
+
+    it('reports hasAccount: true when the invited email already has one', async () => {
+      const founder = await signupFounder();
+      const secondFounder = {
+        tenantName: 'Second Coop',
+        email: 'lookup-existing@example.com',
+        password: PASSWORD,
+      };
+      await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send(secondFounder);
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: secondFounder.email, permissions: [] });
+      const token = extractInviteToken(sentEmails, secondFounder.email);
+
+      const response = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        status: 'pending',
+        hasAccount: true,
+      });
+    });
+
+    it('reports consumed for an already-accepted invite', async () => {
+      const founder = await signupFounder();
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'lookup-consumed@example.com', permissions: [] });
+      const token = extractInviteToken(
+        sentEmails,
+        'lookup-consumed@example.com',
+      );
+      await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, password: PASSWORD });
+
+      const response = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token });
+
+      expect(response.body).toEqual({ status: 'consumed' });
+    });
+
+    it('reports invalid for an unrecognized token', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token: 'not-a-real-token' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'invalid' });
+    });
+  });
+
+  describe('POST /members/invites/:token/join', () => {
+    it('adds a membership to the currently authenticated account when the email matches', async () => {
+      const founder = await signupFounder();
+      const secondFounder = {
+        tenantName: 'Second Coop',
+        email: 'joiner@example.com',
+        password: PASSWORD,
+      };
+      const secondSignup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send(secondFounder);
+      const second = bodyAs<AuthSession>(secondSignup);
+
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: secondFounder.email, permissions: ['members:invite'] });
+      const token = extractInviteToken(sentEmails, secondFounder.email);
+
+      const response = await request(app.getHttpServer())
+        .post(`/members/invites/${token}/join`)
+        .set('Authorization', `Bearer ${second.accessToken}`)
+        .send();
+
+      expect(response.status).toBe(200);
+      const session = bodyAs<AuthSession>(response);
+      expect(session.tenant.name).toBe(FOUNDER.tenantName);
+      expect(session.permissions).toEqual(['members:invite']);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${session.accessToken}`);
+      expect(bodyAs<MemberListResponse>(list).members).toHaveLength(2);
+    });
+
+    it("rejects when the authenticated caller's email doesn't match the invite", async () => {
+      const founder = await signupFounder();
+      const other = {
+        tenantName: 'Other Coop',
+        email: 'notinvited@example.com',
+        password: PASSWORD,
+      };
+      const otherSignup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send(other);
+      const otherSession = bodyAs<AuthSession>(otherSignup);
+
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'someone-invited@example.com', permissions: [] });
+      const token = extractInviteToken(
+        sentEmails,
+        'someone-invited@example.com',
+      );
+
+      const response = await request(app.getHttpServer())
+        .post(`/members/invites/${token}/join`)
+        .set('Authorization', `Bearer ${otherSession.accessToken}`)
+        .send();
+
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects an unauthenticated request', async () => {
+      const founder = await signupFounder();
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'needslogin@example.com', permissions: [] });
+      const token = extractInviteToken(sentEmails, 'needslogin@example.com');
+
+      const response = await request(app.getHttpServer())
+        .post(`/members/invites/${token}/join`)
+        .send();
+
+      expect(response.status).toBe(401);
+    });
+
+    it('enforces single use', async () => {
+      const founder = await signupFounder();
+      const secondFounder = {
+        tenantName: 'Second Coop',
+        email: 'usedjoin@example.com',
+        password: PASSWORD,
+      };
+      const secondSignup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send(secondFounder);
+      const second = bodyAs<AuthSession>(secondSignup);
+      await request(app.getHttpServer())
+        .post('/members/invite')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: secondFounder.email, permissions: [] });
+      const token = extractInviteToken(sentEmails, secondFounder.email);
+
+      const first = await request(app.getHttpServer())
+        .post(`/members/invites/${token}/join`)
+        .set('Authorization', `Bearer ${second.accessToken}`)
+        .send();
+      expect(first.status).toBe(200);
+
+      const secondAttempt = await request(app.getHttpServer())
+        .post(`/members/invites/${token}/join`)
+        .set('Authorization', `Bearer ${second.accessToken}`)
+        .send();
+      expect(secondAttempt.status).toBe(400);
     });
   });
 
