@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -12,18 +12,23 @@ import { Button } from '@milvaloop/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
+import { Skeleton } from '@milvaloop/ui/skeleton';
 
 import { CooperativeChallengeCard, type CooperativeChallenge } from '@/components/auth/cooperative-challenge';
 import { applyServerError } from '@/lib/forms/apply-server-error';
 import { useLoginMutation } from '@/lib/auth/use-auth-mutations';
+import { getSafeRedirectTarget } from '@/lib/navigation/redirect-target';
 
 // Login resolves to one of three outcomes (see LoginResult) once the
 // password checks out: straight in, pick from several, or create a first
 // one. All three render in place here — the ticket only exists as mutation
 // result state, so round-tripping it through a route would mean putting it
-// in a URL (leaks into history) for no benefit.
-export default function LoginPage() {
+// in a URL (leaks into history) for no benefit. A `?redirect=` param (e.g.
+// from an invite link that sent an unauthenticated visitor here first)
+// takes over from the default /dashboard landing spot on success.
+function LoginForm() {
   const router = useRouter();
+  const redirectTo = getSafeRedirectTarget(useSearchParams().get('redirect'));
   const login = useLoginMutation();
   const [formError, setFormError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<CooperativeChallenge | null>(null);
@@ -38,7 +43,7 @@ export default function LoginPage() {
     try {
       const result = await login.mutateAsync(values);
       if (result.status === 'authenticated') {
-        router.push('/dashboard');
+        router.push(redirectTo);
       } else {
         setChallenge(result);
       }
@@ -51,7 +56,7 @@ export default function LoginPage() {
   }
 
   if (challenge) {
-    return <CooperativeChallengeCard challenge={challenge} />;
+    return <CooperativeChallengeCard challenge={challenge} redirectTo={redirectTo} />;
   }
 
   return (
@@ -122,5 +127,13 @@ export default function LoginPage() {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -16,39 +16,148 @@ import { Input } from '@milvaloop/ui/input';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 
 import { CooperativeChallengeCard, type CooperativeChallenge } from '@/components/auth/cooperative-challenge';
+import { getErrorMessage } from '@/lib/api/api-fetch';
+import { useLogoutMutation } from '@/lib/auth/use-auth-mutations';
+import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 import { applyServerError } from '@/lib/forms/apply-server-error';
-import { useAcceptInviteMutation } from '@/lib/members/use-members-mutations';
+import { useInviteLookupQuery } from '@/lib/members/use-invite-lookup-query';
+import { useAcceptInviteMutation, useJoinInviteMutation } from '@/lib/members/use-members-mutations';
 
-// A blank password means "I already have a MilvaLoop account, just add this
-// cooperative to it" — the server decides which case it is by looking up the
-// invited email (see MembersService.acceptInvite); the client can't know in
-// advance, so the field stays optional and the server's own "password is
-// required" rejection (surfaced as a plain page-level error, same as any
-// other applyServerError case) is what tells a new invitee to fill it in.
-const acceptInviteFormSchema = z.object({
-  password: z.union([z.literal(''), passwordSchema]),
-});
-type AcceptInviteFormValues = z.infer<typeof acceptInviteFormSchema>;
+// See docs/plans/invite-accept-rework.md for the full state breakdown this
+// page renders — this replaced a version that treated the invite link
+// itself as proof of identity (silently logging in as an existing account,
+// no password check) and re-attempted the mutating accept endpoint on
+// every reload. Now: a read-only lookup (safe to call repeatedly) decides
+// which of six states to show, and only an authenticated request whose
+// email matches the invite — or a brand-new account — can ever join.
 
-function AcceptInviteForm() {
-  const token = useSearchParams().get('token');
+function MissingInviteCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Missing invite link</CardTitle>
+        <CardDescription>
+          Open this page from the link in your invite email, or ask whoever invited you to send a new one.
+        </CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function InviteStatusCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function LogInToAcceptCard({ loginHref }: { loginHref: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Log in to accept this invite</CardTitle>
+        <CardDescription>You already have a MilvaLoop account for this email.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild>
+          <Link href={loginHref}>Log in</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WrongAccountCard({
+  invitedEmail,
+  currentEmail,
+  loginHref,
+}: {
+  invitedEmail: string;
+  currentEmail: string;
+  loginHref: string;
+}) {
+  const router = useRouter();
+  const logout = useLogoutMutation();
+
+  async function handleLogout() {
+    await logout.mutateAsync();
+    router.push(loginHref);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Wrong account</CardTitle>
+        <CardDescription>
+          This invite was sent to {invitedEmail}, but you&rsquo;re logged in as {currentEmail}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={handleLogout} disabled={logout.isPending}>
+          Log out
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcceptAsCurrentUserCard({ token, tenantName }: { token: string; tenantName: string }) {
+  const router = useRouter();
+  const join = useJoinInviteMutation();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleAccept() {
+    setError(null);
+    try {
+      await join.mutateAsync(token);
+      router.push('/dashboard');
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Join {tenantName}</CardTitle>
+        <CardDescription>You&rsquo;ve been invited to join this cooperative.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Button onClick={handleAccept} disabled={join.isPending} className="w-fit">
+          {join.isPending ? 'Joining…' : 'Accept invite'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+const createAccountFormSchema = z.object({ password: passwordSchema });
+type CreateAccountFormValues = z.infer<typeof createAccountFormSchema>;
+
+function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; email: string; tenantName: string }) {
   const router = useRouter();
   const acceptInvite = useAcceptInviteMutation();
   const [formError, setFormError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<CooperativeChallenge | null>(null);
 
-  const form = useForm<AcceptInviteFormValues>({
-    resolver: zodResolver(acceptInviteFormSchema),
+  const form = useForm<CreateAccountFormValues>({
+    resolver: zodResolver(createAccountFormSchema),
     defaultValues: { password: '' },
   });
 
-  async function onSubmit(values: AcceptInviteFormValues) {
-    if (!token) {
-      return;
-    }
+  async function onSubmit(values: CreateAccountFormValues) {
     setFormError(null);
     try {
-      const result = await acceptInvite.mutateAsync({ token, password: values.password || undefined });
+      const result = await acceptInvite.mutateAsync({ token, ...values });
       if (result.status === 'authenticated') {
         router.push('/dashboard');
       } else {
@@ -66,26 +175,11 @@ function AcceptInviteForm() {
     return <CooperativeChallengeCard challenge={challenge} />;
   }
 
-  if (!token) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Missing invite link</CardTitle>
-          <CardDescription>
-            Open this page from the link in your invite email, or ask whoever invited you to send a new one.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Accept invite</CardTitle>
-        <CardDescription>
-          Set a password if you don&rsquo;t have a MilvaLoop account yet. Already have one? Leave it blank.
-        </CardDescription>
+        <CardTitle>Create your account to join {tenantName}</CardTitle>
+        <CardDescription>{email}</CardDescription>
       </CardHeader>
       <CardContent>
         {formError ? (
@@ -111,24 +205,91 @@ function AcceptInviteForm() {
               )}
             />
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Accepting…' : 'Accept invite'}
+              {form.formState.isSubmitting ? 'Creating account…' : 'Create account and join'}
             </Button>
           </form>
         </Form>
-        <p className="text-muted-foreground mt-4 text-center text-sm">
-          <Link href="/auth/login" className="text-primary underline-offset-4 hover:underline">
-            Log in instead
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );
 }
 
+function AcceptInviteFlow() {
+  const token = useSearchParams().get('token');
+  const lookup = useInviteLookupQuery(token);
+  const { data: session, isPending: sessionPending, isError: sessionError } = useCurrentSessionQuery();
+
+  if (!token) {
+    return <MissingInviteCard />;
+  }
+
+  if (lookup.isPending || sessionPending) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Loading invite…</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (lookup.isError || !lookup.data || lookup.data.status === 'invalid') {
+    return <InviteStatusCard title="Invalid invite" description="This invite link is invalid." />;
+  }
+  if (lookup.data.status === 'expired') {
+    return (
+      <InviteStatusCard
+        title="Invite expired"
+        description="This invite has expired — ask whoever invited you to send a new one."
+      />
+    );
+  }
+
+  const authenticatedSession = !sessionError && session ? session : null;
+  const loginHref = `/auth/login?redirect=${encodeURIComponent(`/invite/accept?token=${token}`)}`;
+
+  if (lookup.data.status === 'consumed') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Invite already used</CardTitle>
+          <CardDescription>This invite has already been accepted.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href={authenticatedSession ? '/dashboard' : '/auth/login'}>
+              {authenticatedSession ? 'Go to dashboard' : 'Log in'}
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { email, tenantName, hasAccount } = lookup.data;
+
+  if (!authenticatedSession) {
+    if (hasAccount) {
+      return <LogInToAcceptCard loginHref={loginHref} />;
+    }
+    return <CreateAccountToJoinCard token={token} email={email} tenantName={tenantName} />;
+  }
+
+  if (authenticatedSession.user.email !== email) {
+    return <WrongAccountCard invitedEmail={email} currentEmail={authenticatedSession.user.email} loginHref={loginHref} />;
+  }
+
+  return <AcceptAsCurrentUserCard token={token} tenantName={tenantName} />;
+}
+
 export default function AcceptInvitePage() {
   return (
     <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-      <AcceptInviteForm />
+      <AcceptInviteFlow />
     </Suspense>
   );
 }

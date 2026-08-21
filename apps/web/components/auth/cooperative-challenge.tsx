@@ -26,19 +26,44 @@ export type CooperativeChallenge =
   | { status: 'selection_required'; ticket: string; cooperatives: CooperativeSummary[] }
   | { status: 'no_cooperatives'; ticket: string };
 
-export function SelectCooperativeCard({ ticket, cooperatives }: { ticket: string; cooperatives: CooperativeSummary[] }) {
+export function SelectCooperativeCard({
+  ticket,
+  cooperatives,
+  redirectTo = '/dashboard',
+}: {
+  ticket: string;
+  cooperatives: CooperativeSummary[];
+  redirectTo?: string;
+}) {
   const router = useRouter();
   const selectCooperative = useSelectCooperativeMutation();
   const [error, setError] = useState<string | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
 
   async function handleSelect(cooperativeId: string) {
     setError(null);
     try {
       await selectCooperative.mutateAsync({ ticket, cooperativeId });
-      router.push('/dashboard');
+      router.push(redirectTo);
     } catch {
       setError('This selection link has expired. Please log in again.');
     }
+  }
+
+  // The ticket only proves identity, not which cooperative — the same
+  // login-ticket-based create endpoint used for the zero-cooperatives case
+  // works here too (it doesn't care how many the account already has), so
+  // "none of these" gets the same form rather than a separate flow.
+  if (creatingNew) {
+    return (
+      <CreateFirstCooperativeCard
+        ticket={ticket}
+        redirectTo={redirectTo}
+        title="Create a new cooperative"
+        description="Set up another cooperative under this account."
+        onCancel={() => setCreatingNew(false)}
+      />
+    );
   }
 
   return (
@@ -65,6 +90,9 @@ export function SelectCooperativeCard({ ticket, cooperatives }: { ticket: string
             {cooperative.name}
           </Button>
         ))}
+        <Button type="button" variant="ghost" className="justify-start" onClick={() => setCreatingNew(true)}>
+          Create a new cooperative instead
+        </Button>
       </CardContent>
     </Card>
   );
@@ -75,7 +103,20 @@ const createFirstCooperativeFormSchema = z.object({
 });
 type CreateFirstCooperativeFormValues = z.infer<typeof createFirstCooperativeFormSchema>;
 
-export function CreateFirstCooperativeCard({ ticket }: { ticket: string }) {
+export function CreateFirstCooperativeCard({
+  ticket,
+  redirectTo = '/dashboard',
+  title = 'Create your cooperative',
+  description = "Your account isn't part of a cooperative yet. Set one up now.",
+  onCancel,
+}: {
+  ticket: string;
+  redirectTo?: string;
+  title?: string;
+  description?: string;
+  /** Renders a "Back" action when reached from SelectCooperativeCard's toggle rather than fresh from a zero-cooperatives login. */
+  onCancel?: () => void;
+}) {
   const router = useRouter();
   const createFirstCooperative = useCreateFirstCooperativeMutation();
   const [formError, setFormError] = useState<string | null>(null);
@@ -89,7 +130,7 @@ export function CreateFirstCooperativeCard({ ticket }: { ticket: string }) {
     setFormError(null);
     try {
       await createFirstCooperative.mutateAsync({ ticket, ...values });
-      router.push('/dashboard');
+      router.push(redirectTo);
     } catch (error) {
       const message = applyServerError(form, error);
       if (message) {
@@ -101,8 +142,8 @@ export function CreateFirstCooperativeCard({ ticket }: { ticket: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create your cooperative</CardTitle>
-        <CardDescription>Your account isn&rsquo;t part of a cooperative yet. Set one up now.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         {formError ? (
@@ -131,6 +172,11 @@ export function CreateFirstCooperativeCard({ ticket }: { ticket: string }) {
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? 'Creating…' : 'Create cooperative'}
             </Button>
+            {onCancel ? (
+              <Button type="button" variant="ghost" onClick={onCancel}>
+                Back
+              </Button>
+            ) : null}
           </form>
         </Form>
       </CardContent>
@@ -140,9 +186,19 @@ export function CreateFirstCooperativeCard({ ticket }: { ticket: string }) {
 
 // Renders whichever card matches the challenge's status — the one bit of
 // branching every caller (login, magic-link consume, invite accept) needs.
-export function CooperativeChallengeCard({ challenge }: { challenge: CooperativeChallenge }) {
+// redirectTo defaults to /dashboard but a caller reached via a `?redirect=`
+// round-trip (see redirect-target.ts) passes its real destination through.
+export function CooperativeChallengeCard({
+  challenge,
+  redirectTo,
+}: {
+  challenge: CooperativeChallenge;
+  redirectTo?: string;
+}) {
   if (challenge.status === 'selection_required') {
-    return <SelectCooperativeCard ticket={challenge.ticket} cooperatives={challenge.cooperatives} />;
+    return (
+      <SelectCooperativeCard ticket={challenge.ticket} cooperatives={challenge.cooperatives} redirectTo={redirectTo} />
+    );
   }
-  return <CreateFirstCooperativeCard ticket={challenge.ticket} />;
+  return <CreateFirstCooperativeCard ticket={challenge.ticket} redirectTo={redirectTo} />;
 }

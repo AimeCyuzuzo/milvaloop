@@ -10,11 +10,14 @@ import { Skeleton } from '@milvaloop/ui/skeleton';
 
 import { CooperativeChallengeCard, type CooperativeChallenge } from '@/components/auth/cooperative-challenge';
 import { useConsumeMagicLinkMutation } from '@/lib/auth/use-auth-mutations';
+import { getSafeRedirectTarget } from '@/lib/navigation/redirect-target';
 
 // Same branching as the login page (see LoginResult) — a magic link also
 // only proves identity, not which cooperative to enter.
 function MagicLinkConsumer() {
-  const token = useSearchParams().get('token');
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  const redirectTo = getSafeRedirectTarget(searchParams.get('redirect'));
   const router = useRouter();
   const consumeMagicLink = useConsumeMagicLinkMutation();
   const [error, setError] = useState<string | null>(null);
@@ -31,16 +34,16 @@ function MagicLinkConsumer() {
       .mutateAsync({ token })
       .then((result) => {
         if (result.status === 'authenticated') {
-          router.replace('/dashboard');
+          router.replace(redirectTo);
         } else {
           setChallenge(result);
         }
       })
       .catch(() => setError('This link is invalid or has expired.'));
-  }, [token, consumeMagicLink, router]);
+  }, [token, consumeMagicLink, router, redirectTo]);
 
   if (challenge) {
-    return <CooperativeChallengeCard challenge={challenge} />;
+    return <CooperativeChallengeCard challenge={challenge} redirectTo={redirectTo} />;
   }
 
   if (!token) {
