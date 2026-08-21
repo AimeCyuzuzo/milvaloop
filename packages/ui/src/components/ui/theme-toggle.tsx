@@ -12,7 +12,10 @@ import {
   DropdownMenuTrigger,
 } from '@milvaloop/ui/dropdown-menu';
 
-const THEME_OPTIONS = [
+// Exported so any other menu that offers a theme choice (e.g. an account
+// dropdown's Theme submenu) draws from the same list instead of redeclaring
+// it — this component itself only needs it for its own dropdown.
+export const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
