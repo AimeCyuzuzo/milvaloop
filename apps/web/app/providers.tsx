@@ -8,14 +8,18 @@ import { Toaster } from '@milvaloop/ui/sonner';
 import { createQueryClient } from '@/lib/api/query-client';
 import { SessionBootstrap } from '@/lib/auth/session-bootstrap';
 
+import { ThemeProvider } from './theme-provider';
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(createQueryClient);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionBootstrap />
-      {children}
-      <Toaster />
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionBootstrap />
+        {children}
+        <Toaster />
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { Button } from '@milvaloop/ui/button';
 import { Skeleton } from '@milvaloop/ui/skeleton';
+import { ThemeToggle } from '@milvaloop/ui/theme-toggle';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { useLogoutMutation } from '@/lib/auth/use-auth-mutations';
@@ -51,9 +52,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ) : (
           <Typography variant="large">{session.tenant.name}</Typography>
         )}
-        <Button variant="ghost" onClick={handleLogout}>
-          Log out
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="ghost" onClick={handleLogout}>
+            Log out
+          </Button>
+        </div>
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">{children}</main>
     </div>
