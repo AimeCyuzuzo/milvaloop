@@ -441,17 +441,66 @@ happened" moment.
    routes enough to trip `ThrottlerModule`. The auth test fix (token
    extraction reading the HTML href, not the plain-text body) shipped with
    the email work in step 3, not held for this step.
-6. `packages/ui`: `dialog.tsx`, `sheet.tsx`.
-7. Frontend: `useHasPermission`/`usePermissions`, `InviteMemberDialog`,
-   `RemoveMemberDialog`, `EditPermissionsSheet`, the `/members` page, the
-   `/invite/accept` page.
-8. Wire permission-driven nav filtering using the real sidebar (once it
-   exists as a real component, not just the sample mockup).
+6. ✅ Done. `packages/ui`: `dialog.tsx`, `sheet.tsx`, plus `checkbox.tsx`
+   (needed for the permission checklists, not called out separately above).
+7. ✅ Done. Frontend: `useHasPermission`/`usePermissions`,
+   `InviteMemberDialog`, `RemoveMemberDialog`, `EditPermissionsSheet`, the
+   `/members` page, the `/invite/accept` page.
+
+   Two deviations from what this step originally sketched:
+   - No "Resend invite" row action — step 4's `MembersModule` never grew a
+     resend endpoint (only invite/revoke/accept), so there's nothing for a
+     resend button to call. The existing workaround is revoke-then-reinvite
+     with the same email. Flagging rather than adding a new backend route
+     mid-frontend-step; revisit if a one-click resend is worth a dedicated
+     endpoint.
+   - `/invite/accept` is one form with a single optional password field,
+     not two visually distinct "existing user" / "new user" flows. The
+     frontend has no way to know in advance which case applies — that
+     lookup is server-side only (`MembersService.acceptInvite`'s
+     `existingUser` branch) — so branching the UI up front would need an
+     extra round-trip just to ask. Leaving the field blank and already
+     having an account behaves exactly like the plan's "Accept and
+     continue"; typing a password behaves exactly like the signup-style
+     flow. Same two outcomes, one form, no pre-check request.
+   - Route is `/invite/accept` (top-level, not nested under `/auth`) but
+     reuses `AuthLayout`'s exact centered-logo-over-a-card frame — extracted
+     to `apps/web/components/layout/centered-shell.tsx` since two route
+     trees now need it. `CooperativeChallengeCard` (the "pick one of
+     several / create your first" step shared by login, magic-link
+     consume, and now invite-accept) was promoted the same way, to
+     `apps/web/components/auth/cooperative-challenge.tsx` — it was already
+     duplicated between login and magic-link before this step; a third
+     consumer was the point past which `CODE_QUALITY.md`'s "second real
+     consumer" rule stops being optional.
+8. ✅ Done. Real sidebar/nav for `(app)/layout.tsx`, replacing the plain
+   header this plan inherited. Bigger than a straight port of the sample
+   mockup's hand-styled nav turned out to be: the account menu needs a
+   full-width icon+label+trailing-content trigger, which is exactly what
+   shadcn's `Sidebar` block (`SidebarMenuButton` etc.) is for — added it
+   properly (`packages/ui/src/components/ui/sidebar.tsx`, plus `tooltip.tsx`
+   and a `use-mobile` hook it depends on) rather than fighting the "always
+   use shadcn Button, no custom className" rule with a hand-rolled trigger.
+   Mobile gets the same sidebar content in Sidebar's built-in Sheet
+   (triggered by a hamburger in a slim top bar), not the mockup's separate
+   bottom tab bar — simpler, and the tab bar's 5 icons included two
+   placeholder destinations (Loans, Governance) this real nav correctly
+   drops. Nav items live in one data array (`_components/nav-items.ts`)
+   with an optional `permission` field; `useVisibleNavItems` filters by it
+   — currently a no-op since neither real item needs one, but the pattern
+   is there for the next nav item that does.
+
+   Knock-on change: the shared layout's `<main>` dropped its `max-w-2xl`
+   cap (a data table needs room a narrow card doesn't) — Dashboard,
+   Account, and Add-cooperative each now wrap their own content in
+   `max-w-2xl` instead, since only they want the narrow look.
 9. ✅ Backend half done: a real signup → invite → real Mailpit delivery →
    real accept (new-user branch) → `GET /members` showing both, all
    exercised live against the running server, not just the automated
-   suite. The "at mobile width" half waits on step 7 — there's no page to
-   open yet.
+   suite. Frontend/mobile-width verification is still pending `pnpm
+   install` (this step added `@tanstack/react-table` to `apps/web` and
+   `@radix-ui/react-tooltip` to `packages/ui` — not run by me, see
+   `AI_GUIDELINES.md`).
 10. Docs cleanup (above) — not done yet, still mid-build.
 
 ## Open decisions to confirm before/while building
