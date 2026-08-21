@@ -408,14 +408,19 @@ happened" moment.
    migration (`pnpm db:generate` — you run this, not me).
 2. `packages/types`: new `PERMISSIONS` values, request/response Zod schemas
    for the new endpoints.
-3. `packages/email`: the templating system — `brand.ts`, `EmailLayout`,
-   migrate the three existing emails, add `InviteEmail`, the `renderEmail`
-   helper. This has no dependency on the Members schema/backend work and
-   can genuinely happen in parallel with steps 1–2, or first if you'd
-   rather see the branded emails land before anything else.
+3. ✅ Done. `packages/email`: the templating system — `brand.ts`,
+   `EmailLayout`, `renderEmail`, the three existing emails migrated onto
+   it. Verified for real through Mailpit (desktop and mobile). Two things
+   from this step still need doing when the rest of this feature is built:
+   the `InviteEmail` template itself (needs the invite token/URL shape from
+   step 4), and a font/typeface pass to match the sans-only, no-monospace
+   decision made afterward (packages/ui's tokens changed since this
+   shipped; the email templates predate that call and weren't revisited).
 4. Backend: `AuditLogService`, `MembersModule` (service + controller +
-   guards wired), rate limiting. Verify the founder's membership actually
-   gets `TENANT_ADMIN` today; fix if not.
+   guards wired), rate limiting. The founder's membership does get
+   `TENANT_ADMIN` on signup — confirmed via a real signup during the email
+   verification work, so that open question from this plan is resolved,
+   no fix needed.
 5. Backend tests: `members.e2e-spec.ts` (+ rate-limit split if needed),
    unit specs for the pieces called out above, email template render tests,
    and the existing auth test fixes if the fake-mailer assertions need it.
