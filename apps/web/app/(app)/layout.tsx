@@ -3,15 +3,15 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { Button } from '@milvaloop/ui/button';
+import { Separator } from '@milvaloop/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@milvaloop/ui/sidebar';
 import { Skeleton } from '@milvaloop/ui/skeleton';
-import { ThemeToggle } from '@milvaloop/ui/theme-toggle';
 import { Typography } from '@milvaloop/ui/typography';
 
-import { useLogoutMutation } from '@/lib/auth/use-auth-mutations';
 import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 
-import { CooperativeSwitcher } from './_components/cooperative-switcher';
+import { AppSidebar } from './_components/app-sidebar';
+import { usePageHeader } from './_components/page-headers';
 
 // No middleware-level gate yet — the access token only ever lives in
 // browser memory (see token-store.ts), so route protection here is a
@@ -22,7 +22,7 @@ import { CooperativeSwitcher } from './_components/cooperative-switcher';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session, isPending, isError } = useCurrentSessionQuery();
-  const logout = useLogoutMutation();
+  const pageHeader = usePageHeader();
 
   useEffect(() => {
     if (!isPending && (isError || !session)) {
@@ -39,27 +39,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  async function handleLogout() {
-    await logout.mutateAsync();
-    router.push('/auth/login');
-  }
-
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        {session.cooperatives.length > 1 ? (
-          <CooperativeSwitcher currentTenantId={session.tenant.id} cooperatives={session.cooperatives} />
-        ) : (
-          <Typography variant="large">{session.tenant.name}</Typography>
-        )}
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Button variant="ghost" onClick={handleLogout}>
-            Log out
-          </Button>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">{children}</main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar
+        tenantId={session.tenant.id}
+        tenantName={session.tenant.name}
+        cooperatives={session.cooperatives}
+        email={session.user.email}
+      />
+      <SidebarInset>
+        <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger />
+          <Separator orientation="vertical" className="h-4" />
+          {pageHeader ? (
+            <div className="flex min-w-0 flex-col justify-center">
+              <Typography as="h1" variant="h3">
+                {pageHeader.title}
+              </Typography>
+              <Typography variant="muted" className="hidden truncate sm:block">
+                {pageHeader.description}
+              </Typography>
+            </div>
+          ) : null}
+        </header>
+        {/* No max-width here — a data table (Members) needs the room a
+            narrow, form-like page (Dashboard, Account) doesn't. Pages that
+            want the narrower look wrap their own content in max-w-2xl. */}
+        <main className="flex-1 px-4 py-8">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
