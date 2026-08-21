@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vitest';
+
+import { acceptInviteSchema, inviteLookupResultSchema } from './members.js';
+
+describe('acceptInviteSchema', () => {
+  it('accepts a token and password', () => {
+    const result = acceptInviteSchema.safeParse({ token: 'abc123', password: 'correct-horse-battery' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing password — this endpoint is only for the no-account case now', () => {
+    const result = acceptInviteSchema.safeParse({ token: 'abc123' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a password under 8 characters', () => {
+    const result = acceptInviteSchema.safeParse({ token: 'abc123', password: 'short' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty token', () => {
+    const result = acceptInviteSchema.safeParse({ token: '', password: 'correct-horse-battery' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('inviteLookupResultSchema', () => {
+  it('accepts a pending invite with an account already on file', () => {
+    const result = inviteLookupResultSchema.safeParse({
+      status: 'pending',
+      email: 'invitee@example.com',
+      tenantName: 'Umurenge Savings Group',
+      hasAccount: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a pending invite with no account yet', () => {
+    const result = inviteLookupResultSchema.safeParse({
+      status: 'pending',
+      email: 'invitee@example.com',
+      tenantName: 'Umurenge Savings Group',
+      hasAccount: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts expired, consumed, and invalid with no other fields', () => {
+    expect(inviteLookupResultSchema.safeParse({ status: 'expired' }).success).toBe(true);
+    expect(inviteLookupResultSchema.safeParse({ status: 'consumed' }).success).toBe(true);
+    expect(inviteLookupResultSchema.safeParse({ status: 'invalid' }).success).toBe(true);
+  });
+
+  it('rejects a pending status missing hasAccount', () => {
+    const result = inviteLookupResultSchema.safeParse({
+      status: 'pending',
+      email: 'invitee@example.com',
+      tenantName: 'Umurenge Savings Group',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unrecognized status', () => {
+    expect(inviteLookupResultSchema.safeParse({ status: 'revoked' }).success).toBe(false);
+  });
+});

@@ -36,14 +36,31 @@ export type MembershipIdParam = z.infer<typeof membershipIdParamSchema>;
 export const membershipInviteIdParamSchema = z.object({ id: z.uuid() });
 export type MembershipInviteIdParam = z.infer<typeof membershipInviteIdParamSchema>;
 
-// POST /members/invites/accept — public, no session yet. `password` is
-// required only when `email` doesn't already have an account; that's a
-// database lookup, not something Zod can express, so the controller
-// enforces it as business logic against one shape rather than branching
-// across two schemas.
+export const inviteTokenParamSchema = z.object({ token: z.string().min(1) });
+export type InviteTokenParam = z.infer<typeof inviteTokenParamSchema>;
+
+// GET /members/invites/lookup — public, read-only, safe to call on every
+// page load/reload (unlike accept, this never consumes the invite). See
+// docs/plans/invite-accept-rework.md: this is what lets /invite/accept show
+// a clean "already used"/"expired" state instead of erroring on reload, and
+// what a future notifications/workspace-selection surface would read from.
+// `hasAccount` isn't an enumeration leak — the caller already needed the
+// high-entropy token (which only ever reached them by email) to ask.
+export const inviteLookupResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('pending'), email: z.email(), tenantName: z.string(), hasAccount: z.boolean() }),
+  z.object({ status: z.literal('expired') }),
+  z.object({ status: z.literal('consumed') }),
+  z.object({ status: z.literal('invalid') }),
+]);
+export type InviteLookupResult = z.infer<typeof inviteLookupResultSchema>;
+
+// POST /members/invites/accept — public, no session. Only ever reached for
+// the "no account exists yet" case (see MembersService.acceptInvite) — an
+// existing-account invitee logs in and hits POST /members/invites/:token/join
+// instead, so password is always required here now.
 export const acceptInviteSchema = z.object({
   token: z.string().min(1),
-  password: passwordSchema.optional(),
+  password: passwordSchema,
 });
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 
