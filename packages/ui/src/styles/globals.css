@@ -16,12 +16,25 @@
  * pairs with dark ink instead.
  */
 :root {
-  --radius: 0.5rem;
+  /* Bumped from 0.5rem — 8px read as tight for the softer, more generous
+     corners the actual design has been reaching for anyway (see the
+     radius-sm/md/lg/xl scale below). One base value, used consistently via
+     that scale, replaces what had become several unrelated one-off
+     rounded-2xl/rounded-3xl/arbitrary values scattered per component. */
+  --radius: 0.75rem;
 
   /* Neutrals are tinted toward Navy's own hue (270) at very low chroma
      instead of shadcn's default zero-chroma gray — borders and muted
-     surfaces read as part of the same family as the brand color. */
-  --background: oklch(0.99 0.003 270);
+     surfaces read as part of the same family as the brand color.
+
+     background and card used to be oklch(0.99) and oklch(1) — a 1%
+     lightness difference, imperceptible. Every card needed a visible
+     border/ring just to read as a surface at all, because color alone
+     wasn't doing any of the work. The fix isn't a border, it's a real gap:
+     background now sits a full, deliberate step below card (and the rest
+     of the ramp shifts down to match), the way a plain white card on a
+     visibly-not-white page reads as elevated with no border needed. */
+  --background: oklch(0.965 0.006 270);
   --foreground: oklch(0.24 0.02 270);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.02 270);
@@ -30,11 +43,11 @@
 
   --primary: oklch(0.328 0.055 277.3); /* Navy #2E3251 */
   --primary-foreground: oklch(0.99 0.003 270);
-  --secondary: oklch(0.965 0.006 270);
+  --secondary: oklch(0.94 0.008 270);
   --secondary-foreground: oklch(0.328 0.055 277.3);
-  --muted: oklch(0.965 0.006 270);
+  --muted: oklch(0.94 0.008 270);
   --muted-foreground: oklch(0.5 0.02 270);
-  --accent: oklch(0.94 0.009 270);
+  --accent: oklch(0.915 0.01 270);
   --accent-foreground: oklch(0.24 0.02 270);
 
   --success: oklch(0.726 0.136 167.4); /* Teal #31C195 */
@@ -44,8 +57,8 @@
   --destructive: oklch(0.599 0.18 27.5); /* Coral #D6483F */
   --destructive-foreground: oklch(0.99 0.003 270);
 
-  --border: oklch(0.93 0.008 270);
-  --input: oklch(0.93 0.008 270);
+  --border: oklch(0.89 0.01 270);
+  --input: oklch(0.89 0.01 270);
   --ring: oklch(0.762 0.115 252.1); /* Sky #7AB6F9 */
 }
 
