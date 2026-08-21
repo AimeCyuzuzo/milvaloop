@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: milvaloop
       POSTGRES_DB: milvaloop
     ports:
-      - '5432:5432'
+      - '5333:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     image: redis:8-alpine
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '5335:6379'
     volumes:
       - redis_data:/data
     healthcheck:

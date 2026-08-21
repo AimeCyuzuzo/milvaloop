@@ -17,6 +17,7 @@
     "SMTP_FROM",
     "JWT_ACCESS_SECRET",
     "JWT_REFRESH_SECRET",
+    "AUTH_TICKET_SECRET",
     "JWT_ACCESS_TTL",
     "JWT_REFRESH_TTL",
     "COOKIE_DOMAIN",
@@ -36,6 +37,13 @@
     },
     "check-types": {
       "dependsOn": ["^check-types"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "dev": {
       "dependsOn": ["^build"],

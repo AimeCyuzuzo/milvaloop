@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
+import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 
 import { Providers } from './providers';
@@ -64,12 +65,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
+        {/* Reads the brand primary token directly, not a literal hex — this
+            keeps it in sync with the active theme (Navy in light mode, Sky
+            in dark) without needing its own light/dark branching. No
+            spinner: a bare top bar reads cleaner against this design
+            language than the default corner spinner. */}
+        <NextTopLoader color="var(--primary)" showSpinner={false} />
         <Providers>{children}</Providers>
       </body>
     </html>

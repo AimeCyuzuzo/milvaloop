@@ -12,17 +12,19 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@milvaloop/eslint-config": "workspace:*",
-    "eslint": "^9.39.1",
     "@milvaloop/typescript-config": "workspace:*",
-    "typescript": "5.9.2"
+    "eslint": "^9.39.1",
+    "typescript": "5.9.2",
+    "vitest": "^4.1.10"
   }
 }

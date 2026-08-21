@@ -13,6 +13,16 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
         destructive:
           'border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        success: 'border-transparent bg-success text-success-foreground [a&]:hover:bg-success/90',
+        warning: 'border-transparent bg-warning text-warning-foreground [a&]:hover:bg-warning/90',
+        // Tinted-chip readings of the same three semantic colors — a
+        // background wash + colored text + a faint matching border instead
+        // of a solid fill. Reads as a quieter, more refined status marker;
+        // use where a table/list needs to show status on every row without
+        // the page turning into a wall of solid color.
+        successSoft: 'border-success/30 bg-success/15 text-success',
+        warningSoft: 'border-warning/30 bg-warning/15 text-warning',
+        destructiveSoft: 'border-destructive/30 bg-destructive/15 text-destructive',
         outline: 'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
       },
     },

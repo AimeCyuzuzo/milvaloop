@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Button } from '@milvaloop/ui/button';
 import { Typography } from '@milvaloop/ui/typography';
+import { ThemeToggle } from '@milvaloop/ui/theme-toggle';
 import { siteConfig } from '@/lib/site-config';
 
 const NAV_LINKS = [
@@ -29,8 +30,9 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Button variant="ghost" asChild>
-            <Link href="/login">Sign in</Link>
+            <Link href="/auth/login">Sign in</Link>
           </Button>
           <Button asChild>
             <Link href="/pricing">Start free trial</Link>

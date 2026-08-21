@@ -3,10 +3,23 @@
 import { useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
+import { Toaster } from '@milvaloop/ui/sonner';
+
 import { createQueryClient } from '@/lib/api/query-client';
+import { SessionBootstrap } from '@/lib/auth/session-bootstrap';
+
+import { ThemeProvider } from './theme-provider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(createQueryClient);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionBootstrap />
+        {children}
+        <Toaster />
+      </QueryClientProvider>
+    </ThemeProvider>
+  );
 }

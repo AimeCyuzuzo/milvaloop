@@ -4,6 +4,18 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
+    "/packages/.+/dist/.+\\.js$": [
+      "babel-jest",
+      {
+        "presets": [["@babel/preset-env", { "targets": { "node": "current" } }]],
+        "plugins": ["babel-plugin-transform-import-meta"]
+      }
+    ],
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@milvaloop/db/testing$": "<rootDir>/../../../packages/db/dist/testing.js",
+    "^@milvaloop/([^/]+)$": "<rootDir>/../../../packages/$1/dist/index.js",
+    "^@react-email/render$": "<rootDir>/fakes/fake-react-email-render.ts"
   }
 }

@@ -5,52 +5,87 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * "Ledger" design language — see the design-language brainstorm for the
+ * full rationale. Short version: Navy (#2E3251), Sky (#7AB6F9), and Teal
+ * (#31C195) are the brand colors; Amber and Coral are new additions that
+ * close a real gap (a contribution has to be able to say "pending" or
+ * "overdue," and the brand set had no color for either). Contrast math
+ * decided the pairing rule below, it wasn't picked by eye: Navy is the
+ * only one of the five dark enough to carry white text — everything else
+ * pairs with dark ink instead.
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.5rem;
+
+  /* Neutrals are tinted toward Navy's own hue (270) at very low chroma
+     instead of shadcn's default zero-chroma gray — borders and muted
+     surfaces read as part of the same family as the brand color. */
+  --background: oklch(0.99 0.003 270);
+  --foreground: oklch(0.24 0.02 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.24 0.02 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.24 0.02 270);
+
+  --primary: oklch(0.328 0.055 277.3); /* Navy #2E3251 */
+  --primary-foreground: oklch(0.99 0.003 270);
+  --secondary: oklch(0.965 0.006 270);
+  --secondary-foreground: oklch(0.328 0.055 277.3);
+  --muted: oklch(0.965 0.006 270);
+  --muted-foreground: oklch(0.5 0.02 270);
+  --accent: oklch(0.94 0.009 270);
+  --accent-foreground: oklch(0.24 0.02 270);
+
+  --success: oklch(0.726 0.136 167.4); /* Teal #31C195 */
+  --success-foreground: oklch(0.22 0.02 270);
+  --warning: oklch(0.709 0.13 64.1); /* Amber #D98E3F */
+  --warning-foreground: oklch(0.22 0.02 270);
+  --destructive: oklch(0.599 0.18 27.5); /* Coral #D6483F */
+  --destructive-foreground: oklch(0.99 0.003 270);
+
+  --border: oklch(0.93 0.008 270);
+  --input: oklch(0.93 0.008 270);
+  --ring: oklch(0.762 0.115 252.1); /* Sky #7AB6F9 */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* Navy is already dark enough to be the elevated surface, so dark mode
+     isn't a generic near-black inversion — the page background goes
+     darker still and Navy itself becomes every card. Sky takes over as
+     the primary action color, since Navy-on-Navy has no contrast left. */
+  --background: oklch(0.18 0.025 270);
+  --foreground: oklch(0.96 0.006 270);
+  --card: oklch(0.328 0.055 277.3);
+  --card-foreground: oklch(0.96 0.006 270);
+  --popover: oklch(0.328 0.055 277.3);
+  --popover-foreground: oklch(0.96 0.006 270);
+
+  --primary: oklch(0.762 0.115 252.1); /* Sky */
+  --primary-foreground: oklch(0.2 0.03 270);
+  --secondary: oklch(0.26 0.04 270);
+  --secondary-foreground: oklch(0.96 0.006 270);
+  --muted: oklch(0.26 0.04 270);
+  --muted-foreground: oklch(0.72 0.02 270);
+  --accent: oklch(0.3 0.045 270);
+  --accent-foreground: oklch(0.96 0.006 270);
+
+  --success: oklch(0.726 0.136 167.4);
+  --success-foreground: oklch(0.16 0.02 270);
+  --warning: oklch(0.709 0.13 64.1);
+  --warning-foreground: oklch(0.16 0.02 270);
+  --destructive: oklch(0.68 0.19 27);
+  --destructive-foreground: oklch(0.16 0.02 270);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.762 0.115 252.1);
 }
 
 @theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -70,6 +105,10 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -82,6 +121,6 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
