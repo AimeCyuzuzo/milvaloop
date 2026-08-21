@@ -416,36 +416,55 @@ happened" moment.
    step 4), and a font/typeface pass to match the sans-only, no-monospace
    decision made afterward (packages/ui's tokens changed since this
    shipped; the email templates predate that call and weren't revisited).
-4. Backend: `AuditLogService`, `MembersModule` (service + controller +
-   guards wired), rate limiting. The founder's membership does get
-   `TENANT_ADMIN` on signup — confirmed via a real signup during the email
-   verification work, so that open question from this plan is resolved,
-   no fix needed.
-5. Backend tests: `members.e2e-spec.ts` (+ rate-limit split if needed),
-   unit specs for the pieces called out above, email template render tests,
-   and the existing auth test fixes if the fake-mailer assertions need it.
+4. ✅ Done. `AuditLogService`, `MembersModule` (service + controller + all
+   six endpoints + rate limiting), `InviteEmail`. The founder's membership
+   does get `TENANT_ADMIN` on signup — confirmed via a real signup, so
+   that open question is resolved, no fix needed. Also found and fixed a
+   real gap while wiring the guard in: `PermissionsGuard` never actually
+   implemented the "admin gets everything" override this plan assumed —
+   it still required every specific permission listed individually.
+
+   Two refinements to what this plan originally sketched, both safety
+   improvements: `grantablePermissionSchema` excludes `TENANT_ADMIN`
+   entirely (can't be granted *or* revoked through the edit-permissions
+   endpoint — enforced at the schema layer, not just the UI), so editing
+   someone's non-admin permissions can never silently de-admin them as a
+   side effect of the request body structurally not being able to include
+   it. The last-admin guard this plan described therefore only applies to
+   `DELETE /members/:id` (a removal genuinely drops every permission the
+   membership held, admin included) — not to the permissions-edit
+   endpoint, which can't touch admin status at all.
+5. ✅ Done. `members.e2e-spec.ts` — 15 cases covering invite, both accept
+   branches (new/existing user), revoke, permission edit (including the
+   admin-preservation guarantee above), remove, and the last-admin guard.
+   No rate-limit split needed — none of the new tests hit the throttled
+   routes enough to trip `ThrottlerModule`. The auth test fix (token
+   extraction reading the HTML href, not the plain-text body) shipped with
+   the email work in step 3, not held for this step.
 6. `packages/ui`: `dialog.tsx`, `sheet.tsx`.
 7. Frontend: `useHasPermission`/`usePermissions`, `InviteMemberDialog`,
    `RemoveMemberDialog`, `EditPermissionsSheet`, the `/members` page, the
    `/invite/accept` page.
 8. Wire permission-driven nav filtering using the real sidebar (once it
    exists as a real component, not just the sample mockup).
-9. End-to-end manual verification per `MAIN.md`'s rule: real invite email
-   through Mailpit — check it actually looks right, not just that it
-   sends — real accept flow for both a new and an existing email, at
-   mobile width.
-10. Docs cleanup (above).
+9. ✅ Backend half done: a real signup → invite → real Mailpit delivery →
+   real accept (new-user branch) → `GET /members` showing both, all
+   exercised live against the running server, not just the automated
+   suite. The "at mobile width" half waits on step 7 — there's no page to
+   open yet.
+10. Docs cleanup (above) — not done yet, still mid-build.
 
 ## Open decisions to confirm before/while building
 
-- `MembersModule` as its own bounded context vs. folding into
-  `CooperativesModule` — this plan recommends a separate module; say now if
-  you'd rather keep it inside Cooperatives.
+- `MembersModule` as its own bounded context — done; built as a separate
+  module per this plan's recommendation, not folded into Cooperatives.
 - `7d` invite TTL — arbitrary but reasonable; change if you want something
   else.
-- Whether `/members/invite`'s email-send failure should surface to the
-  inviter as a visible warning (this plan says yes, unlike the
-  enumeration-sensitive login-adjacent emails) — confirm that reasoning
+- `/members/invite`'s email-send failure is logged only, **not** surfaced
+  to the inviter as a visible warning — this plan originally said it
+  should be, but that needs a response-shape change (an `emailSent` flag)
+  that felt like scope creep mid-implementation. Flagging the deviation
+  rather than quietly matching what the plan said; revisit if you want it.
   holds.
 - `audit_events` schema above is deliberately minimal (one flat table, no
   per-domain sub-tables) — fine to start, but worth knowing this is the
