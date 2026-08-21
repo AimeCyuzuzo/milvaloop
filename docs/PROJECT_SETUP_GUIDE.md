@@ -26,6 +26,7 @@ workaround — a wrong guess compounds silently, a question costs one message.
 | Dev email capture | Mailpit | Real SMTP flow in dev without sending real email or depending on a SaaS. |
 | Shared UI | shadcn/ui + Tailwind | Owned code (not a black-box npm dependency), consistent design tokens, accessible primitives via Radix. |
 | Icons | lucide-react | One icon set, consistently. |
+| Visual Page Loader | nextjs-toploader | Simple, efficient, customizable progress bar for Next.js applications. |
 | Server state (frontend) | TanStack Query | Caching, refetching, request dedup — don't hand-roll this in `useEffect`. |
 | Client-only global state (frontend) | Zustand | Session/active-tenant/UI state shared across unrelated components. |
 | Validation | Zod | One validation library everywhere: env vars, request bodies, path/query params, external API responses. |
