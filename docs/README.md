@@ -23,6 +23,10 @@ Plain-markdown documentation for the MilvaLoop platform.
 - [Backlog](./BACKLOG.md) — work deliberately deferred during a change
   rather than skipped without a record (invites, Redis-backed rate
   limiting, and other items pushed to later).
+- [`plans/`](./plans/) — point-in-time end-to-end implementation plans for a
+  specific feature (schema, permissions, backend, frontend, tests, build
+  order). Not standing reference docs — delete or archive a plan once its
+  feature ships.
 
 Repository-wide development rules live under [`.agents/rules/`](../.agents/rules/):
 [`MAIN.md`](../.agents/rules/MAIN.md) (overview, layout, workflow),
