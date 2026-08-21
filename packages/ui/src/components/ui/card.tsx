@@ -3,11 +3,18 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@milvaloop/ui/lib/utils';
 
-const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm', {
+// No border, no shadow — the background/card contrast (see globals.css) is
+// what reads this as a surface, not a line around it. See sample.tsx's v8
+// notes for the full reasoning: a bordered card on a barely-different
+// background is fighting color contrast that isn't doing its job; a real
+// contrast step needs no border at all. `highlighted` is the one deliberate
+// exception — a real accent, not a structural boundary, so it gets its own
+// explicit border rather than inheriting one.
+const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl py-6', {
   variants: {
     variant: {
       default: 'bg-card',
-      highlighted: 'bg-card border-primary',
+      highlighted: 'bg-card border border-primary',
     },
   },
   defaultVariants: {
