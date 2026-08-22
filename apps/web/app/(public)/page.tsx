@@ -1,10 +1,21 @@
 import Link from 'next/link';
-import { BarChart3, Clock, ShieldCheck, TrendingUp, Users, Vote } from 'lucide-react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Clock,
+  Image as ImageIcon,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+  Vote,
+} from 'lucide-react';
 
 import { Button } from '@milvaloop/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@milvaloop/ui/card';
 import { Badge } from '@milvaloop/ui/badge';
 import { Typography } from '@milvaloop/ui/typography';
+import { Card } from '@milvaloop/ui/card';
+import { Label } from '@milvaloop/ui/label';
+import Image from 'next/image';
 
 const PROBLEMS = [
   'Contribution records split across spreadsheets, notebooks, and receipts nobody can find later.',
@@ -52,84 +63,64 @@ const FEATURES = [
   },
 ];
 
+// Illustrative bar heights for the hero mockup's mini chart — not real
+// contribution data, a data-driven dimension like sample.tsx's HeroStat
+// progress bar, not a design token, so an inline style is the right tool
+// here rather than a fixed Tailwind height class.
+const CONTRIBUTION_TREND = [40, 55, 48, 70, 62, 85];
+
 export default function HomePage() {
   return (
     <>
-      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 text-center sm:pt-28">
-        <Badge variant="secondary">For cooperatives, not spreadsheets</Badge>
-        <Typography variant="h1" className="mx-auto mt-6 max-w-3xl text-balance sm:text-5xl">
-          Running a cooperative shouldn&apos;t depend on one person&apos;s memory
-        </Typography>
-        <Typography variant="lead" className="mx-auto mt-6 max-w-2xl">
-          MilvaLoop gives your whole team one shared, trustworthy record of contributions, shares,
-          loans, and decisions — so anyone can answer &quot;what happened, and why&quot; without
-          asking around.
-        </Typography>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Button size="lg" asChild>
-            <Link href="/auth/signup">Start your free 2-month trial</Link>
-          </Button>
-          <Button size="lg" variant="outline" asChild>
-            <Link href="/about">Learn more</Link>
-          </Button>
-        </div>
-      </section>
-
-      <section className="border-y bg-secondary/30">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <Typography variant="h3" as="h2" className="text-center sm:text-3xl">
-            It&apos;s not just a treasurer problem — it&apos;s a team problem
+      <section className='flex justify-around mt-[2vh] max-w-6xl mx-auto'>
+        <Card className='bg-linear-to-b from-card to-muted w-[49%] h-[60vh] relative rounded-xl overflow-hidden p-3' >
+          <Typography variant={`h1`} className=' font-normal'>
+            A cooperative doesn't have to rely on one person's memory
           </Typography>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            {PROBLEMS.map((problem) => (
-              <Card key={problem}>
-                <CardContent>
-                  <Typography variant="muted">{problem}</Typography>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <Typography variant="h3" as="h2" className="text-center sm:text-3xl">
-          Everything your cooperative needs to explain itself
-        </Typography>
-        <Typography variant="muted" className="mx-auto mt-4 max-w-2xl text-center">
-          Tracking made easy, history kept automatically, and analytics that show where you&apos;re
-          growing.
-        </Typography>
-
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <Card key={feature.title}>
-              <CardHeader>
-                <feature.icon className="size-8 text-primary" />
-                <CardTitle>{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Typography variant="muted">{feature.description}</Typography>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="border-t bg-secondary/30">
-        <div className="mx-auto max-w-6xl px-6 py-16 text-center">
-          <Typography variant="h3" as="h2" className="sm:text-3xl">
-            Give your cooperative a record everyone can trust
+          <Typography variant={`small`} color={`muted`}>
+            Use MilvaLoop to keep everyone on the same page, with analytics available at any time, so you can make informed decisions together.
           </Typography>
-          <Typography variant="muted" className="mx-auto mt-4 max-w-xl">
-            Try MilvaLoop free for 2 months. No credit card required to get started.
-          </Typography>
-          <div className="mt-8">
-            <Button size="lg" asChild>
-              <Link href="/pricing">See pricing</Link>
+          <Link href={`/auth/signup`} className='absolute flex top-1/2 left-1/2 -translate-1/2'>
+            <Button size={`lg`}>
+                Get Started
             </Button>
+          </Link>
+          <Image
+            src="/spiral2.avif"
+            alt="Description of image"
+            width={1000}
+            height={600}
+            className="absolute bottom-0 right-0"
+          />
+        </Card>
+        <Card className='bg-secondary w-[49%] h-[60vh] relative rounded-xl overflow-hidden' >
+          {/* <Image
+            src="/spiral3.avif"
+            alt="Description of image"
+            width={1000}
+            height={600}
+            className="absolute rotate-180 top-0 right-0 opacity-20"
+          /> */}
+          <div className="m-2 flex gap-x-2 z-10">
+            {
+              [
+                "History", "Financial goals", "Analytics", "Exporting"
+              ].map((text) => (
+                <Typography key={text} variant="small" color='muted' className='bg-card rounded-full p-2'>
+                  {text}
+                </Typography>
+              ))
+            }
           </div>
-        </div>
+          <Image
+            src="/dashboard-sample.avif"
+            alt="Description of image"
+            width={1000}
+            height={1400}
+            className="absolute bottom-[2%] rounded-lg bg-blue-200 left-[2%] w-[96%] h-[80%]"
+          />
+        </Card>
+        
       </section>
     </>
   );

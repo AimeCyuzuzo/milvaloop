@@ -21,9 +21,17 @@ const typographyVariants = cva('', {
       inlineCode:
         'bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold',
     },
+    color: {
+      balance: 'text-balance',
+      primary: 'text-primary',
+      secondary: 'text-secondary',
+      accent: 'text-accent',
+      muted: 'text-muted-foreground',
+    },
   },
   defaultVariants: {
     variant: 'p',
+    color: 'balance',
   },
 });
 
@@ -63,7 +71,7 @@ function Typography({
     <Comp
       data-slot="typography"
       data-variant={resolvedVariant}
-      className={cn(typographyVariants({ variant: resolvedVariant }), className)}
+      className={cn(typographyVariants({ variant: resolvedVariant, color: props.color }), className)}
       {...props}
     />
   );

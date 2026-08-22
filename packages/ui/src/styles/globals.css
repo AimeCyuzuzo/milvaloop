@@ -5,35 +5,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * "Ledger" design language — see the design-language brainstorm for the
- * full rationale. Short version: Navy (#2E3251), Sky (#7AB6F9), and Teal
- * (#31C195) are the brand colors; Amber and Coral are new additions that
- * close a real gap (a contribution has to be able to say "pending" or
- * "overdue," and the brand set had no color for either). Contrast math
- * decided the pairing rule below, it wasn't picked by eye: Navy is the
- * only one of the five dark enough to carry white text — everything else
- * pairs with dark ink instead.
- */
+.google-sans {
+  font-family: "Google Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings:
+    "GRAD" 0;
+}
+
 :root {
-  /* Bumped from 0.5rem — 8px read as tight for the softer, more generous
-     corners the actual design has been reaching for anyway (see the
-     radius-sm/md/lg/xl scale below). One base value, used consistently via
-     that scale, replaces what had become several unrelated one-off
-     rounded-2xl/rounded-3xl/arbitrary values scattered per component. */
   --radius: 0.75rem;
-
-  /* Neutrals are tinted toward Navy's own hue (270) at very low chroma
-     instead of shadcn's default zero-chroma gray — borders and muted
-     surfaces read as part of the same family as the brand color.
-
-     background and card used to be oklch(0.99) and oklch(1) — a 1%
-     lightness difference, imperceptible. Every card needed a visible
-     border/ring just to read as a surface at all, because color alone
-     wasn't doing any of the work. The fix isn't a border, it's a real gap:
-     background now sits a full, deliberate step below card (and the rest
-     of the ramp shifts down to match), the way a plain white card on a
-     visibly-not-white page reads as elevated with no border needed. */
   --background: oklch(0.965 0.006 270);
   --foreground: oklch(0.24 0.02 270);
   --card: oklch(1 0 0);
@@ -107,7 +88,7 @@
 
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.762 0.115 252.1);
+  --ring: #7ab6f9;
 
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
