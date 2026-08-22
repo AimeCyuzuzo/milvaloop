@@ -398,9 +398,10 @@ export class MembersService {
 
   // Authenticated path — the caller already proved their own identity, so
   // this only ever adds a membership to *that* account, never anyone
-  // else's. Requires the invite's email to match the caller's own (see
-  // docs/plans/invite-accept-rework.md — this is what replaced the old
-  // "invite link as proof of identity" behavior for existing accounts).
+  // else's. Requires the invite's email to match the caller's own: an
+  // invite link is authorization to join a cooperative, not proof of
+  // identity, so it can't be used to sign in as someone else's account
+  // (see docs/plans/invite-accept-rework.md for the full design).
   async joinViaInvite(
     claims: AccessTokenClaims,
     token: string,
@@ -515,9 +516,9 @@ export class MembersService {
       // A narrow but real race: an account could have been created for
       // this email between the frontend's lookup call and this submit
       // (e.g. the invitee signed up separately in another tab). Rejecting
-      // outright — rather than silently logging in as that account, the
-      // way this endpoint used to — is the whole point of this rework: an
-      // invite link is authorization to join, not proof of identity.
+      // outright, rather than logging in as that account, follows directly
+      // from the same rule as joinViaInvite above: an invite link is
+      // authorization to join, not proof of identity.
       const [existingUser] = await tx
         .select({ id: users.id })
         .from(users)

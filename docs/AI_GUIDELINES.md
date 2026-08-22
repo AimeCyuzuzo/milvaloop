@@ -186,9 +186,18 @@ detail lives there, not repeated here:
 - Don't leave dead code behind: commented-out old implementations, unused
   imports/variables/exports introduced by your own change, or a debug
   `console.log` left in.
-- Comments explain *why*, not what the diff did — no "added this because
-  the user asked for X" narration in code; a reader six months from now
-  doesn't have this conversation for context.
+- Comments explain *why the code is the way it is*, never the history of
+  how it got there. Don't narrate a diff, a fix, a past mistake, or a
+  conversation — no "added this because the user asked for X," no "fixed
+  a bug where...," no "this used to be a hardcoded hex, now it's a
+  token," no "no longer does Y," no "restored the comment that got
+  deleted." A comment should read identically whether the code was
+  written five minutes ago or five years ago: state the durable reasoning
+  (why this constraint, this shape, this ordering exists) as a fact about
+  the current code, not as an edit relative to some prior version a
+  future reader never saw and doesn't have this conversation for context
+  on. If the only thing worth saying is what changed, that belongs in the
+  commit message, not the code.
 - Prefer the smallest correct diff. Don't rewrite a whole file when an
   edit to the relevant lines does the job — a large, low-signal diff is
   harder to review and hides the actual change inside noise.

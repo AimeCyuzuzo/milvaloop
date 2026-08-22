@@ -24,12 +24,11 @@ import { useInviteLookupQuery } from '@/lib/members/use-invite-lookup-query';
 import { useAcceptInviteMutation, useJoinInviteMutation } from '@/lib/members/use-members-mutations';
 
 // See docs/plans/invite-accept-rework.md for the full state breakdown this
-// page renders — this replaced a version that treated the invite link
-// itself as proof of identity (silently logging in as an existing account,
-// no password check) and re-attempted the mutating accept endpoint on
-// every reload. Now: a read-only lookup (safe to call repeatedly) decides
-// which of six states to show, and only an authenticated request whose
-// email matches the invite — or a brand-new account — can ever join.
+// page renders. A read-only lookup (safe to call repeatedly, including on
+// reload) decides which of six states to show; only an authenticated
+// request whose email matches the invite, or a brand-new account, can
+// ever join — an invite link is authorization to join a cooperative, not
+// proof of identity.
 
 function MissingInviteCard() {
   return (

@@ -22,11 +22,12 @@ const typographyVariants = cva('', {
         'bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold',
     },
     // Optional foreground-color override, independent of variant — e.g. a
-    // `small` variant that also needs to read as muted. `text-balance`
-    // belongs to individual variants that want it (h1 already has it
-    // baked in above), not here: it controls text wrapping, not color, so
-    // mixing it into this group was a mistake, and defaulting every
-    // Typography instance to it was never intended.
+    // `small` variant that also needs to read as muted. No default: most
+    // variants already set their own color (lead's built-in muted, for
+    // instance), so forcing one here for every instance would fight them.
+    // text-balance controls line-wrapping, not color, so it lives on the
+    // individual variants that want it (h1, above) rather than in this
+    // group.
     color: {
       primary: 'text-primary',
       secondary: 'text-secondary',

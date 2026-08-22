@@ -7,8 +7,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { siteConfig } from '@/lib/site-config';
 
-// Geist Mono stays for actual monospace use (inline code, see
-// typography.tsx's inlineCode variant) — the body font is Poppins.
+// The body font is Poppins (below); Geist Mono is reserved for actual
+// monospace use — see typography.tsx's inlineCode variant.
 const geistMono = localFont({
   src: './fonts/GeistMonoVF.woff',
   variable: '--font-geist-mono',
