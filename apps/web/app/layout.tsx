@@ -1,24 +1,23 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import NextTopLoader from 'nextjs-toploader';
-import { Google_Sans_Code } from 'next/font/google'
+import { Poppins } from 'next/font/google';
 import './globals.css';
 
 import { Providers } from './providers';
 import { siteConfig } from '@/lib/site-config';
 
-const geistSans = localFont({
-  src: './fonts/GeistVF.woff',
-  variable: '--font-geist-sans',
-});
+// Geist Mono stays for actual monospace use (inline code, see
+// typography.tsx's inlineCode variant) — the body font is Poppins.
 const geistMono = localFont({
   src: './fonts/GeistMonoVF.woff',
   variable: '--font-geist-mono',
 });
 
-const googleSans = Google_Sans_Code({
+const poppins = Poppins({
   subsets: ['latin'],
-  variable: '--font-google-sans',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
 });
 
 export const metadata: Metadata = {
@@ -72,7 +71,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`antialiased --font-google-sans`}>
+      <body className={`${poppins.variable} ${geistMono.variable} antialiased`}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

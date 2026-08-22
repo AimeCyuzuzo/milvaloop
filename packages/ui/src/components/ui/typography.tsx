@@ -21,8 +21,13 @@ const typographyVariants = cva('', {
       inlineCode:
         'bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold',
     },
+    // Optional foreground-color override, independent of variant — e.g. a
+    // `small` variant that also needs to read as muted. `text-balance`
+    // belongs to individual variants that want it (h1 already has it
+    // baked in above), not here: it controls text wrapping, not color, so
+    // mixing it into this group was a mistake, and defaulting every
+    // Typography instance to it was never intended.
     color: {
-      balance: 'text-balance',
       primary: 'text-primary',
       secondary: 'text-secondary',
       accent: 'text-accent',
@@ -31,7 +36,6 @@ const typographyVariants = cva('', {
   },
   defaultVariants: {
     variant: 'p',
-    color: 'balance',
   },
 });
 
@@ -55,6 +59,7 @@ type TypographyVariant = keyof typeof DEFAULT_ELEMENT;
 function Typography({
   className,
   variant = 'p',
+  color,
   asChild = false,
   as,
   ...props
@@ -71,7 +76,7 @@ function Typography({
     <Comp
       data-slot="typography"
       data-variant={resolvedVariant}
-      className={cn(typographyVariants({ variant: resolvedVariant, color: props.color }), className)}
+      className={cn(typographyVariants({ variant: resolvedVariant, color }), className)}
       {...props}
     />
   );
