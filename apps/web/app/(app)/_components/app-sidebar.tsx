@@ -1,0 +1,70 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import type { CooperativeSummary } from '@milvaloop/types';
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from '@milvaloop/ui/sidebar';
+import { Typography } from '@milvaloop/ui/typography';
+
+import { AccountMenu } from './account-menu';
+import { CooperativeSwitcher } from './cooperative-switcher';
+import { useVisibleNavItems } from './use-visible-nav-items';
+
+export function AppSidebar({
+  tenantId,
+  tenantName,
+  cooperatives,
+  email,
+}: {
+  tenantId: string;
+  tenantName: string;
+  cooperatives: CooperativeSummary[];
+  email: string;
+}) {
+  const pathname = usePathname();
+  const navItems = useVisibleNavItems();
+
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        {cooperatives.length > 1 ? (
+          <CooperativeSwitcher currentTenantId={tenantId} cooperatives={cooperatives} />
+        ) : (
+          <Typography variant="large">{tenantName}</Typography>
+        )}
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={isActive}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      {item.label}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <AccountMenu email={email} />
+      </SidebarFooter>
+    </Sidebar>
+  );
+}

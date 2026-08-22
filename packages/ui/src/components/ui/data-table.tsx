@@ -86,7 +86,7 @@ export function DataTable<TData, TValue>({
       {/* No outer card/ring here — the table sits directly on the page,
           the tinted header row is its own visual boundary. overflow-hidden
           only exists so that tint's corners clip to the radius below. */}
-      <div className="overflow-hidden rounded-2xl">
+      <div className="overflow-hidden rounded-xl">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

@@ -4,10 +4,12 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CooperativesModule } from './cooperatives/cooperatives.module';
 import { DbModule } from './db/db.module';
 import { MailerModule } from './email/mailer.module';
+import { MembersModule } from './members/members.module';
 
 @Module({
   imports: [
@@ -20,8 +22,10 @@ import { MailerModule } from './email/mailer.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
     DbModule,
     MailerModule,
+    AuditModule,
     AuthModule,
     CooperativesModule,
+    MembersModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

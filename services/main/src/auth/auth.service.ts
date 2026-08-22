@@ -38,6 +38,7 @@ import * as argon2 from 'argon2';
 import { isUniqueViolation } from '../common/db-errors';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
+import type { Transaction } from '../db/types';
 import { MAILER } from '../email/mailer.module';
 import type { AccessTokenClaims } from './auth.guard';
 import {
@@ -70,14 +71,6 @@ const LOGIN_TICKET_PURPOSE = 'login-ticket';
 // previewCooperativeSlug — astronomically generous for how many
 // cooperatives could ever share the same generated base slug.
 const MAX_SLUG_ATTEMPTS = 25;
-
-// Drizzle's transaction callback parameter — accepted anywhere a plain
-// Database is, so insertTenantAndMembership works both standalone (each
-// slug attempt gets its own real transaction) and nested inside an existing
-// transaction (each attempt becomes a real SAVEPOINT instead, so a
-// collision only rolls back that attempt, not the caller's whole
-// transaction — see signup, the only caller that nests it).
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 // Per-IP throttling (see AuthController) doesn't stop a distributed request
 // flood aimed at a single inbox. A short cooldown on the account itself
@@ -636,7 +629,11 @@ export class AuthService {
   // Shared by login and consumeMagicLink: once identity is proven, resolve
   // to a session (exactly one membership), or a ticket for the caller to
   // finish with — either picking one of several, or creating their first.
-  private async finishLogin(user: UserRow): Promise<LoginOutcome> {
+  // Public, not private — the members module's accept-invite flow is a
+  // second real consumer (see docs/plans/members-management.md): a newly
+  // created or newly added membership needs exactly this 1-cooperative/
+  // many-cooperatives branching to decide what to do next, same as login.
+  async finishLogin(user: UserRow): Promise<LoginOutcome> {
     const rows = await this.db
       .select({ tenant: tenants, membership: memberships })
       .from(memberships)

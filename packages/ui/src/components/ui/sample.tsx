@@ -3,6 +3,40 @@
 /**
  * SAMPLE — throwaway visual brainstorm, not a real component.
  *
+ * v8: the underlying visual language, not colors or components this time.
+ * Comparing this page against the new transactional emails (packages/email)
+ * side by side surfaced three real, code-level inconsistencies, not a taste
+ * difference:
+ *
+ * 1. Radius was never actually coming from the design system's --radius
+ *    token. globals.css defines a real 4-step scale (sm/md/lg/xl) derived
+ *    from one base value, but this file reached for Tailwind's stock
+ *    rounded-2xl/rounded-3xl instead — utilities with zero relationship to
+ *    that token. The "soft card" look people responded well to was an
+ *    accident of picking whatever looked right each round, not a decided
+ *    system. Fixed at the source: --radius itself moved from 0.5rem to
+ *    0.75rem (see globals.css), and every rounded-2xl/3xl in this file is
+ *    gone, replaced by the token scale used consistently by role — small
+ *    interactive elements get rounded-md, surfaces get rounded-xl, pills
+ *    stay rounded-full. That's three shapes, deliberately, not five.
+ * 2. Two off-scale font sizes (text-[1.9rem], text-[0.65rem]) bypassed the
+ *    type scale entirely — one of them nearly reinventing text-3xl for no
+ *    reason. Both now use real scale classes.
+ * 3. Financial figures rendered in an actual monospace typeface. Decided
+ *    against keeping that as a "Ledger" signature — it read as spreadsheet/
+ *    engineering rather than the calm, modern minimalism the emails
+ *    established. Tabular-nums alignment stays (via the CSS feature, not a
+ *    typeface swap), font-mono is gone everywhere.
+ *
+ * Underneath all three: background and card were oklch(0.99) and oklch(1)
+ * — a 1% lightness gap, invisible. Every card needed a visible ring/border
+ * just to read as a surface, because color alone wasn't doing the work.
+ * That's backwards from how the emails read as effortlessly minimal: a
+ * plain white card on a visibly-not-white page, no border anywhere. Fixed
+ * in globals.css (background now a real step below card); every ring-1
+ * ring-border on a card/section here is gone to match — the color gap does
+ * that job now, not a line.
+ *
  * v7: three specific corrections to v6.
  *
  * 1. The "Outstanding balance" card's colored left border is gone — it
@@ -42,13 +76,6 @@
  * hard rule, and the reference direction the small icon-in-a-translucent-
  * circle on a solid-color tile relies on it, so it's back for the two hero
  * tiles specifically (not the two neutral ones, and not the nav).
- *
- * Still NOT done here: bumping the global --radius token, or changing the
- * shared Button/Input/Select's shape. Those are used on already-shipped
- * screens (auth forms, the cooperative switcher); this file hand-rolls its
- * own buttons/fields for exactly that reason. table.tsx/data-table.tsx
- * remain the exception — still no other real consumer, so their container
- * radius moved to rounded-3xl to match the rest of this page.
  */
 
 import { useEffect, useState } from 'react';
@@ -155,7 +182,7 @@ const CONTRIBUTION_COLUMNS: ColumnDef<Contribution>[] = [
     header: 'Member',
     cell: ({ row }) => (
       <div className="flex items-center gap-2.5">
-        <span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
+        <span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-md">
           <User className="size-3.5" />
         </span>
         {row.original.member}
@@ -167,7 +194,7 @@ const CONTRIBUTION_COLUMNS: ColumnDef<Contribution>[] = [
     accessorKey: 'amount',
     header: 'Amount',
     cell: ({ row }) => (
-      <div className="text-right font-mono [font-variant-numeric:tabular-nums]">{rwf(row.original.amount)}</div>
+      <div className="text-right [font-variant-numeric:tabular-nums]">{rwf(row.original.amount)}</div>
     ),
   },
   {
@@ -251,11 +278,9 @@ function StatCard({
   const { text, icon: Icon } = NOTE_VARIANT[noteVariant];
 
   return (
-    <div className="bg-card ring-border/60 rounded-3xl p-5 ring-1">
+    <div className="bg-card rounded-xl p-5">
       <p className="text-muted-foreground text-sm">{label}</p>
-      <p className="mt-2 font-mono text-[1.9rem] font-semibold tracking-tight [font-variant-numeric:tabular-nums]">
-        {value}
-      </p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight [font-variant-numeric:tabular-nums]">{value}</p>
       <div className="mt-3 flex items-center justify-between">
         <span className={cn('inline-flex items-center gap-1.5 text-sm', text)}>
           {Icon ? <Icon className="size-3.5" /> : null}
@@ -297,16 +322,14 @@ function HeroStat({
   const { card, chip, fill } = HERO_TONE[tone];
 
   return (
-    <div className={cn('rounded-3xl p-5', card)}>
+    <div className={cn('rounded-xl p-5', card)}>
       <div className="flex items-center gap-2">
         <span className={cn('flex size-7 items-center justify-center rounded-full', chip)}>
           <Icon className="size-3.5" />
         </span>
         <p className="text-sm opacity-70">{label}</p>
       </div>
-      <p className="mt-3 font-mono text-[1.9rem] font-semibold tracking-tight [font-variant-numeric:tabular-nums]">
-        {value}
-      </p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight [font-variant-numeric:tabular-nums]">{value}</p>
       {progress !== undefined ? (
         <div className={cn('mt-3 h-1.5 w-full overflow-hidden rounded-full', chip)}>
           <div className={cn('h-full rounded-full', fill)} style={{ width: `${progress}%` }} />
@@ -417,7 +440,7 @@ function RecordContributionModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center font-sans sm:items-center">
       <button aria-label="Close" onClick={onClose} className="bg-foreground/40 absolute inset-0" />
-      <div className="bg-card relative w-full max-w-sm rounded-t-3xl p-7 shadow-xl sm:rounded-3xl">
+      <div className="bg-card relative w-full max-w-sm rounded-t-xl p-7 shadow-xl sm:rounded-xl">
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold">Record a contribution</h2>
@@ -441,7 +464,7 @@ function RecordContributionModal({ onClose }: { onClose: () => void }) {
         >
           <label className="flex flex-col gap-2 text-sm">
             <span className="text-muted-foreground">Member</span>
-            <select className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-xl border px-3.5 py-3 text-base focus-visible:ring-[3px] focus-visible:outline-none">
+            <select className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border px-3.5 py-3 text-base focus-visible:ring-[3px] focus-visible:outline-none">
               <option>Member 004</option>
               <option>Member 011</option>
               <option>Member 014</option>
@@ -454,7 +477,7 @@ function RecordContributionModal({ onClose }: { onClose: () => void }) {
             <input
               type="number"
               defaultValue={75000}
-              className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-xl border px-3.5 py-3 font-mono text-base [font-variant-numeric:tabular-nums] focus-visible:ring-[3px] focus-visible:outline-none"
+              className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border px-3.5 py-3 text-base [font-variant-numeric:tabular-nums] focus-visible:ring-[3px] focus-visible:outline-none"
             />
           </label>
 
@@ -463,7 +486,7 @@ function RecordContributionModal({ onClose }: { onClose: () => void }) {
             <input
               type="date"
               defaultValue="2026-06-05"
-              className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-xl border px-3.5 py-3 text-base focus-visible:ring-[3px] focus-visible:outline-none"
+              className="border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border px-3.5 py-3 text-base focus-visible:ring-[3px] focus-visible:outline-none"
             />
           </label>
 
@@ -499,7 +522,7 @@ function AccountMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="hover:bg-accent flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors">
+        <button className="hover:bg-accent flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors">
           <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium">
             AU
           </span>
@@ -555,7 +578,7 @@ function Sample() {
           here, just the logo and the same account menu the sidebar uses. */}
       <header className="bg-background sticky top-0 z-30 flex h-14 items-center justify-between border-b px-4 lg:hidden">
         <div className="flex items-center gap-2">
-          <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-xl text-sm font-bold">
+          <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-bold">
             M
           </span>
           <span className="text-sm font-semibold">MilvaLoop</span>
@@ -583,8 +606,8 @@ function Sample() {
         {/* ------------------------------------------------------ sidenav */}
         <nav className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r p-4 lg:flex">
           <div className="mb-6 flex items-center justify-between gap-2">
-            <button className="hover:bg-accent -ml-1 flex min-w-0 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1 text-left transition-colors">
-              <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-xl text-sm font-bold">
+            <button className="hover:bg-accent -ml-1 flex min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 pl-1 text-left transition-colors">
+              <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-bold">
                 M
               </span>
               <span className="truncate text-sm font-semibold">Umurenge Savings Group</span>
@@ -610,9 +633,9 @@ function Sample() {
                     key={item.label}
                     href="#"
                     className={cn(
-                      'flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm transition-colors',
+                      'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
                       item.active
-                        ? 'bg-primary/15 text-primary shadow-xs font-semibold'
+                        ? 'bg-primary/15 text-primary font-semibold'
                         : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium',
                     )}
                   >
@@ -636,7 +659,7 @@ function Sample() {
               key={item.label}
               href="#"
               className={cn(
-                'flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 text-[0.65rem] transition-colors',
+                'flex flex-col items-center gap-0.5 rounded-md px-3 py-1 text-xs transition-colors',
                 item.active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground font-medium',
               )}
             >
@@ -689,7 +712,7 @@ function Sample() {
 
           {/* ---------------------------------------------------- charts */}
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
-            <div className="bg-card ring-border/60 rounded-3xl p-6 ring-1 lg:col-span-3">
+            <div className="bg-card rounded-xl p-6 lg:col-span-3">
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm font-medium">Expected vs. collected</p>
                 <button className="border-border text-muted-foreground hover:bg-accent inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium">
@@ -706,7 +729,7 @@ function Sample() {
                 </span>
               </div>
             </div>
-            <div className="bg-card ring-border/60 rounded-3xl p-6 ring-1 lg:col-span-2">
+            <div className="bg-card rounded-xl p-6 lg:col-span-2">
               <p className="mb-4 text-sm font-medium">Membership growth</p>
               <MembershipTrendChart />
               <p className="text-muted-foreground mt-4 text-xs">24 → 31 members in six months</p>
@@ -718,10 +741,7 @@ function Sample() {
             <div className="lg:col-span-3">
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm font-medium">Contributions</p>
-                <a
-                  href="#"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium"
-                >
+                <a href="#" className="text-primary inline-flex items-center gap-1 text-xs font-medium hover:underline">
                   View all <ArrowRight className="size-3" />
                 </a>
               </div>
@@ -743,7 +763,7 @@ function Sample() {
               />
             </div>
 
-            <div className="bg-card ring-border/60 rounded-3xl p-6 ring-1 lg:col-span-2">
+            <div className="bg-card rounded-xl p-6 lg:col-span-2">
               <p className="mb-4 text-sm font-medium">Recent activity</p>
               <ul className="flex flex-col gap-4">
                 {ACTIVITY.map((entry, i) => (

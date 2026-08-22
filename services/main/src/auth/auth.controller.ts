@@ -40,8 +40,9 @@ import type { Request, Response } from 'express';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AccessTokenGuard, type AccessTokenClaims } from './auth.guard';
-import { AuthService, type LoginOutcome } from './auth.service';
+import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
+import { toLoginResponse } from './login-response';
 import {
   readRefreshCookie,
   setRefreshCookie,
@@ -76,7 +77,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResult> {
     const outcome = await this.authService.login(body);
-    return this.toLoginResponse(outcome, res);
+    return toLoginResponse(outcome, res);
   }
 
   @Post('refresh')
@@ -130,7 +131,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResult> {
     const outcome = await this.authService.consumeMagicLink(body.token);
-    return this.toLoginResponse(outcome, res);
+    return toLoginResponse(outcome, res);
   }
 
   @Get('me')
@@ -257,21 +258,5 @@ export class AuthController {
       );
     setRefreshCookie(res, refreshToken, refreshTokenExpiresAt);
     return session;
-  }
-
-  // selection_required/no_cooperatives aren't error states — the request
-  // succeeded and produced a legitimate next step, so both stay 200 OK
-  // with a discriminant the frontend branches on, same as an authenticated
-  // result.
-  private toLoginResponse(outcome: LoginOutcome, res: Response): LoginResult {
-    if (outcome.status === 'authenticated') {
-      setRefreshCookie(
-        res,
-        outcome.issued.refreshToken,
-        outcome.issued.refreshTokenExpiresAt,
-      );
-      return { status: 'authenticated', ...outcome.issued.session };
-    }
-    return outcome;
   }
 }

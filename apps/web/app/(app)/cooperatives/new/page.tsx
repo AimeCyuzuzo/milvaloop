@@ -44,39 +44,43 @@ export default function NewCooperativePage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add a cooperative</CardTitle>
-        <CardDescription>Set up a new cooperative under your existing account.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {formError ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{formError}</AlertDescription>
-          </Alert>
-        ) : null}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cooperative name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Umurenge Savings Group" autoComplete="organization" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <CooperativeSlugPreview name={form.watch('name')} />
-            <Button type="submit" disabled={form.formState.isSubmitting} className="mt-2">
-              {form.formState.isSubmitting ? 'Creating…' : 'Create cooperative'}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+    <div className="mx-auto w-full max-w-2xl">
+      <Card>
+        <CardHeader>
+          <CardTitle>Add a cooperative</CardTitle>
+          <CardDescription>Set up a new cooperative under your existing account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {formError ? (
+            <div className="mb-4">
+              <Alert variant="destructive">
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cooperative name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Umurenge Savings Group" autoComplete="organization" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <CooperativeSlugPreview name={form.watch('name')} />
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Creating…' : 'Create cooperative'}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -21,6 +21,19 @@ const typographyVariants = cva('', {
       inlineCode:
         'bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold',
     },
+    // Optional foreground-color override, independent of variant — e.g. a
+    // `small` variant that also needs to read as muted. No default: most
+    // variants already set their own color (lead's built-in muted, for
+    // instance), so forcing one here for every instance would fight them.
+    // text-balance controls line-wrapping, not color, so it lives on the
+    // individual variants that want it (h1, above) rather than in this
+    // group.
+    color: {
+      primary: 'text-primary',
+      secondary: 'text-secondary',
+      accent: 'text-accent',
+      muted: 'text-muted-foreground',
+    },
   },
   defaultVariants: {
     variant: 'p',
@@ -47,6 +60,7 @@ type TypographyVariant = keyof typeof DEFAULT_ELEMENT;
 function Typography({
   className,
   variant = 'p',
+  color,
   asChild = false,
   as,
   ...props
@@ -63,7 +77,7 @@ function Typography({
     <Comp
       data-slot="typography"
       data-variant={resolvedVariant}
-      className={cn(typographyVariants({ variant: resolvedVariant }), className)}
+      className={cn(typographyVariants({ variant: resolvedVariant, color }), className)}
       {...props}
     />
   );

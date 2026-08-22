@@ -16,12 +16,25 @@
  * pairs with dark ink instead.
  */
 :root {
-  --radius: 0.5rem;
+  /* Bumped from 0.5rem — 8px read as tight for the softer, more generous
+     corners the actual design has been reaching for anyway (see the
+     radius-sm/md/lg/xl scale below). One base value, used consistently via
+     that scale, replaces what had become several unrelated one-off
+     rounded-2xl/rounded-3xl/arbitrary values scattered per component. */
+  --radius: 0.75rem;
 
   /* Neutrals are tinted toward Navy's own hue (270) at very low chroma
      instead of shadcn's default zero-chroma gray — borders and muted
-     surfaces read as part of the same family as the brand color. */
-  --background: oklch(0.99 0.003 270);
+     surfaces read as part of the same family as the brand color.
+
+     background and card used to be oklch(0.99) and oklch(1) — a 1%
+     lightness difference, imperceptible. Every card needed a visible
+     border/ring just to read as a surface at all, because color alone
+     wasn't doing any of the work. The fix isn't a border, it's a real gap:
+     background now sits a full, deliberate step below card (and the rest
+     of the ramp shifts down to match), the way a plain white card on a
+     visibly-not-white page reads as elevated with no border needed. */
+  --background: oklch(0.965 0.006 270);
   --foreground: oklch(0.24 0.02 270);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.02 270);
@@ -30,11 +43,11 @@
 
   --primary: oklch(0.328 0.055 277.3); /* Navy #2E3251 */
   --primary-foreground: oklch(0.99 0.003 270);
-  --secondary: oklch(0.965 0.006 270);
+  --secondary: oklch(0.94 0.008 270);
   --secondary-foreground: oklch(0.328 0.055 277.3);
-  --muted: oklch(0.965 0.006 270);
+  --muted: oklch(0.94 0.008 270);
   --muted-foreground: oklch(0.5 0.02 270);
-  --accent: oklch(0.94 0.009 270);
+  --accent: oklch(0.915 0.01 270);
   --accent-foreground: oklch(0.24 0.02 270);
 
   --success: oklch(0.726 0.136 167.4); /* Teal #31C195 */
@@ -44,9 +57,24 @@
   --destructive: oklch(0.599 0.18 27.5); /* Coral #D6483F */
   --destructive-foreground: oklch(0.99 0.003 270);
 
-  --border: oklch(0.93 0.008 270);
-  --input: oklch(0.93 0.008 270);
+  --border: oklch(0.89 0.01 270);
+  --input: oklch(0.89 0.01 270);
   --ring: oklch(0.762 0.115 252.1); /* Sky #7AB6F9 */
+
+  /* shadcn's Sidebar block ships its own token set so a sidebar can be a
+     visually distinct panel from the page it sits in. This design doesn't
+     want that — the sidebar sits on the same background, divided only by
+     a border (see the app shell) — so these simply alias the tokens above
+     instead of introducing a second, independent set of colors to keep in
+     sync. */
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
@@ -79,11 +107,20 @@
 
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.762 0.115 252.1);
+  --ring: oklch(0.762 0.115 252.1); /* Sky */
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
@@ -114,6 +151,27 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --animate-breathe: breathe 7s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.92);
+  }
 }
 
 @layer base {

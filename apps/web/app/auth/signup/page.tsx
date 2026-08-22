@@ -50,9 +50,11 @@ export default function SignupPage() {
       </CardHeader>
       <CardContent>
         {formError ? (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{formError}</AlertDescription>
-          </Alert>
+          <div className="mb-4">
+            <Alert variant="destructive">
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          </div>
         ) : null}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -96,7 +98,7 @@ export default function SignupPage() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={form.formState.isSubmitting} className="mt-2">
+            <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
             </Button>
           </form>

@@ -24,8 +24,11 @@ import { CURRENT_SESSION_QUERY_KEY } from './use-current-session';
 // the access token and seed the ['auth', 'me'] cache directly rather than
 // firing a redundant /auth/me request right after — everything reading the
 // current session (including useSessionStore, via SessionBootstrap) picks
-// this up the same way either way.
-function applyIssuedSession(queryClient: QueryClient, session: AuthSession) {
+// this up the same way either way. Exported for use-members-mutations.ts's
+// join-via-invite mutation, which issues a session the same way but from an
+// already-authenticated request (so it can't share useIssueSessionMutation
+// below, which always calls apiFetch with skipAuth: true).
+export function applyIssuedSession(queryClient: QueryClient, session: AuthSession) {
   setAccessToken(session.accessToken);
   queryClient.setQueryData(CURRENT_SESSION_QUERY_KEY, {
     user: session.user,
@@ -35,21 +38,28 @@ function applyIssuedSession(queryClient: QueryClient, session: AuthSession) {
   });
 }
 
-function useIssueSessionMutation<TInput>(path: string) {
+// Defaults to skipAuth: true because most callers are pre-authentication
+// (signup, a login-ticket-based select/create). switchCooperative and
+// createCooperative are the exception — already-authenticated endpoints —
+// and must override this, or apiFetch never attaches the access token and
+// AccessTokenGuard rejects the request with a 401 before it even reaches
+// the handler.
+function useIssueSessionMutation<TInput>(path: string, options: { skipAuth?: boolean } = { skipAuth: true }) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: TInput) =>
-      apiFetch<AuthSession>(path, { method: 'POST', body: JSON.stringify(input), skipAuth: true }),
+      apiFetch<AuthSession>(path, { method: 'POST', body: JSON.stringify(input), skipAuth: options.skipAuth }),
     onSuccess: (session) => applyIssuedSession(queryClient, session),
   });
 }
 
-// login and magic-link/consume return a union — the cooperative isn't known
+// login, magic-link/consume, and (see use-members-mutations.ts)
+// invites/accept all return this same union — the cooperative isn't known
 // yet if there's more than one, so only the 'authenticated' branch writes
 // to the session cache. The page itself handles the other two branches (it
 // needs the ticket/cooperative list to render a picker).
-function useLoginResultMutation<TInput>(path: string) {
+export function useLoginResultMutation<TInput>(path: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -97,11 +107,11 @@ export function useCreateFirstCooperativeMutation() {
 }
 
 export function useSwitchCooperativeMutation() {
-  return useIssueSessionMutation<SwitchCooperativeInput>('/auth/cooperatives/switch');
+  return useIssueSessionMutation<SwitchCooperativeInput>('/auth/cooperatives/switch', { skipAuth: false });
 }
 
 export function useCreateCooperativeMutation() {
-  return useIssueSessionMutation<CreateCooperativeInput>('/cooperatives');
+  return useIssueSessionMutation<CreateCooperativeInput>('/cooperatives', { skipAuth: false });
 }
 
 // No longer issues a session — the caller logs in fresh with the new
