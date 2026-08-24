@@ -14,7 +14,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@milvaloop/ui/sidebar';
-import { Typography } from '@milvaloop/ui/typography';
 
 import { AccountMenu } from './account-menu';
 import { CooperativeSwitcher } from './cooperative-switcher';
@@ -37,11 +36,7 @@ export function AppSidebar({
   return (
     <Sidebar>
       <SidebarHeader>
-        {cooperatives.length > 1 ? (
-          <CooperativeSwitcher currentTenantId={tenantId} cooperatives={cooperatives} />
-        ) : (
-          <Typography variant="large">{tenantName}</Typography>
-        )}
+        <CooperativeSwitcher currentTenantId={tenantId} currentTenantName={tenantName} cooperatives={cooperatives} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

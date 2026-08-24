@@ -20,15 +20,20 @@ import { apiFetch } from '../api/api-fetch';
 import { setAccessToken } from './token-store';
 import { CURRENT_SESSION_QUERY_KEY } from './use-current-session';
 
-// Shared by every mutation that returns a full, unambiguous session: store
-// the access token and seed the ['auth', 'me'] cache directly rather than
-// firing a redundant /auth/me request right after — everything reading the
-// current session (including useSessionStore, via SessionBootstrap) picks
-// this up the same way either way. Exported for use-members-mutations.ts's
-// join-via-invite mutation, which issues a session the same way but from an
-// already-authenticated request (so it can't share useIssueSessionMutation
-// below, which always calls apiFetch with skipAuth: true).
+// Shared by every mutation that resolves to a session for a specific
+// tenant — signup, login, switching cooperatives, creating one, joining one
+// via invite. Every cache entry keyed without a tenant id (members,
+// contributions, anything scoped to "the current cooperative") is wiped
+// first: refetching only the queries a naive diff thinks are "affected"
+// left a real cross-tenant bug — switching cooperatives kept the *previous*
+// tenant's members/contributions/etc. sitting in cache, visible until each
+// individual query happened to refetch on its own schedule. `clear()`
+// removes every cached query outright, then the session query is
+// immediately re-seeded so the app shell doesn't flash a signed-out state
+// while every other mounted query naturally refetches fresh for the new
+// tenant.
 export function applyIssuedSession(queryClient: QueryClient, session: AuthSession) {
+  queryClient.clear();
   setAccessToken(session.accessToken);
   queryClient.setQueryData(CURRENT_SESSION_QUERY_KEY, {
     user: session.user,
@@ -148,6 +153,10 @@ export function useLogoutMutation() {
   return useMutation({
     mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
     onSuccess: () => {
+      // Same reasoning as applyIssuedSession — a stale tenant-scoped cache
+      // surviving logout would leak into whichever account logs in next in
+      // this same tab.
+      queryClient.clear();
       setAccessToken(null);
       queryClient.setQueryData(CURRENT_SESSION_QUERY_KEY, null);
     },
