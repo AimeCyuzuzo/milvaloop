@@ -1,0 +1,134 @@
+'use client';
+
+import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+import { setSharePriceSchema, type SetSharePriceInput } from '@milvaloop/types';
+
+import { Alert, AlertDescription } from '@milvaloop/ui/alert';
+import { Button } from '@milvaloop/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@milvaloop/ui/dialog';
+import { DatePicker } from '@milvaloop/ui/date-picker';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
+import { Input } from '@milvaloop/ui/input';
+
+import { currentPeriod } from '@/lib/contributions/format-period';
+import { applyServerError } from '@/lib/forms/apply-server-error';
+import { useSetSharePriceMutation } from '@/lib/contributions/use-contribution-mutations';
+
+function defaultValues(): SetSharePriceInput {
+  return { amount: 0, effectiveFrom: currentPeriod() };
+}
+
+export function SetSharePriceDialog({ triggerLabel }: { triggerLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const setSharePrice = useSetSharePriceMutation();
+
+  const form = useForm<SetSharePriceInput>({
+    resolver: zodResolver(setSharePriceSchema),
+    defaultValues: defaultValues(),
+  });
+
+  function resetForm() {
+    setFormError(null);
+    form.reset(defaultValues());
+  }
+
+  async function onSubmit(values: SetSharePriceInput) {
+    setFormError(null);
+    try {
+      await setSharePrice.mutateAsync(values);
+      toast.success('Share price set.');
+      setOpen(false);
+      resetForm();
+    } catch (error) {
+      const message = applyServerError(form, error);
+      if (message) {
+        setFormError(message);
+      }
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          resetForm();
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>{triggerLabel}</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Set the share price</DialogTitle>
+          <DialogDescription>
+            This won&rsquo;t change how past months were priced — it only applies going forward.
+          </DialogDescription>
+        </DialogHeader>
+        {formError ? (
+          <Alert variant="destructive">
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Price per share (RWF)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      name={field.name}
+                      value={Number.isNaN(field.value) ? '' : field.value}
+                      onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="effectiveFrom"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Effective from</FormLabel>
+                  <FormControl>
+                    <DatePicker value={field.value} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

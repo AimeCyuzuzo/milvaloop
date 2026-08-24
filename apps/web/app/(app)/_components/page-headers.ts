@@ -13,8 +13,9 @@ export interface PageHeader {
 const PAGE_HEADERS: Record<string, PageHeader> = {
   '/dashboard': { title: 'Overview', description: 'A quick look at your cooperative.' },
   '/members': { title: 'Members', description: 'Who has access to this cooperative, and what they can do.' },
+  '/contributions': { title: 'Contributions', description: 'Shares, monthly contributions, and approvals.' },
   '/account': { title: 'Account', description: 'Manage your account settings.' },
-  '/cooperatives/new': { title: 'Add a cooperative', description: 'Set up a new cooperative under your existing account.' },
+  '/cooperatives/new': { title: 'Create a cooperative', description: 'Set up a new cooperative under your existing account.' },
 };
 
 export function usePageHeader(): PageHeader | undefined {

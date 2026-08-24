@@ -1,4 +1,4 @@
-import { Home, Users, type LucideIcon } from 'lucide-react';
+import { Coins, Home, Users, type LucideIcon } from 'lucide-react';
 import type { Permission } from '@milvaloop/types';
 
 export interface NavItem {
@@ -16,4 +16,8 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: Home },
   { label: 'Members', href: '/members', icon: Users },
+  // No `permission` — every member can at least see their own contribution
+  // status (transparency is the design, see the feature plan); recording
+  // and approving are gated inside the page itself, not at the nav level.
+  { label: 'Contributions', href: '/contributions', icon: Coins },
 ];

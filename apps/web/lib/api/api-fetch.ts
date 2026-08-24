@@ -100,9 +100,14 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
     throw new ApiError(`${options.method ?? 'GET'} ${path} failed with ${response.status}`, response.status, body);
   }
 
-  if (response.status === 204) {
+  // Checked by content rather than only status === 204 — a 200/201 with
+  // nothing written to the response body (e.g. a controller method that
+  // returns void) parses to an empty string here too, and JSON.parse would
+  // throw on it exactly the way a real error would, masking a request that
+  // actually succeeded.
+  const text = await response.text();
+  if (!text) {
     return undefined as T;
   }
-
-  return (await response.json()) as T;
+  return JSON.parse(text) as T;
 }

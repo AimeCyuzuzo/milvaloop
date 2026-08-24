@@ -1,5 +1,7 @@
 export * from './mailer.js';
 export * from './render.js';
+export * from './templates/contribution-recorded-email.js';
+export * from './templates/contribution-reminder-email.js';
 export * from './templates/email-verification-email.js';
 export * from './templates/invite-email.js';
 export * from './templates/magic-link-email.js';
