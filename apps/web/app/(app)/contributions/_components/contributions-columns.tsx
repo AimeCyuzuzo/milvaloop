@@ -3,7 +3,7 @@ import type { ContributionListItem } from '@milvaloop/types';
 
 import { Badge } from '@milvaloop/ui/badge';
 
-import { formatAmount } from '@/lib/contributions/format-period';
+import { formatAmount, formatDate } from '@/lib/contributions/format-period';
 
 import { ContributionRowActions } from './contribution-row-actions';
 
@@ -12,10 +12,6 @@ const STATUS_BADGE_VARIANT = {
   approved: 'successSoft',
   rejected: 'destructiveSoft',
 } as const;
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);

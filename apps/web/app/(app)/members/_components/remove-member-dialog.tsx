@@ -1,14 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import { toast } from 'sonner';
 import type { ActiveMember } from '@milvaloop/types';
 
-import { Alert, AlertDescription } from '@milvaloop/ui/alert';
-import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@milvaloop/ui/dialog';
+import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
 
-import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useRemoveMemberMutation } from '@/lib/members/use-members-mutations';
 
 export function RemoveMemberDialog({
@@ -20,44 +16,23 @@ export function RemoveMemberDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
   const remove = useRemoveMemberMutation();
 
   async function handleRemove() {
-    setError(null);
-    try {
-      await remove.mutateAsync(member.membershipId);
-      toast.success(`Removed ${member.email}.`);
-      onOpenChange(false);
-    } catch (caught) {
-      setError(getErrorMessage(caught));
-    }
+    await remove.mutateAsync(member.membershipId);
+    toast.success(`Removed ${member.email}.`);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove {member.email}?</DialogTitle>
-          <DialogDescription>
-            They&rsquo;ll lose access to this cooperative immediately. This can only be undone by inviting them
-            again.
-          </DialogDescription>
-        </DialogHeader>
-        {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleRemove} disabled={remove.isPending}>
-            {remove.isPending ? 'Removing…' : 'Remove member'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Remove ${member.email}?`}
+      description="They'll lose access to this cooperative immediately. This can only be undone by inviting them again."
+      confirmLabel="Remove member"
+      pendingLabel="Removing…"
+      variant="destructive"
+      onConfirm={handleRemove}
+    />
   );
 }

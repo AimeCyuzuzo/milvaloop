@@ -5,10 +5,11 @@ import { toast } from 'sonner';
 import { PERMISSIONS, type ContributionListItem } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
+import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@milvaloop/ui/tooltip';
 
-import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useHasPermission } from '@/lib/auth/use-permissions';
+import { formatAmount, formatDate } from '@/lib/contributions/format-period';
 import { useApproveContributionMutation } from '@/lib/contributions/use-contribution-mutations';
 import { useMyMembershipId } from '@/lib/contributions/use-my-membership-id';
 import { useMembersQuery } from '@/lib/members/use-members-query';
@@ -33,6 +34,7 @@ function useEligibleApproverCount(): number {
 }
 
 export function ContributionRowActions({ contribution }: { contribution: ContributionListItem }) {
+  const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const canApprove = useHasPermission(PERMISSIONS.CONTRIBUTIONS_APPROVE);
   const myMembershipId = useMyMembershipId();
@@ -46,17 +48,13 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
   const isSelfLocked = eligibleApprovers > 1 && contribution.recordedBy.membershipId === myMembershipId;
 
   async function handleApprove() {
-    try {
-      await approve.mutateAsync(contribution.id);
-      toast.success('Contribution approved.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
+    await approve.mutateAsync(contribution.id);
+    toast.success('Contribution approved.');
   }
 
   const approveButton = (
-    <Button size="sm" onClick={handleApprove} disabled={isSelfLocked || approve.isPending}>
-      {approve.isPending ? 'Approving…' : 'Approve'}
+    <Button size="sm" onClick={() => setApproveOpen(true)} disabled={isSelfLocked}>
+      Approve
     </Button>
   );
 
@@ -75,6 +73,15 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
       <Button size="sm" variant="outline" onClick={() => setRejectOpen(true)}>
         Reject
       </Button>
+      <ConfirmDialog
+        open={approveOpen}
+        onOpenChange={setApproveOpen}
+        title="Approve this contribution?"
+        description={`${contribution.member.email}'s ${formatAmount(contribution.amount)} contribution paid on ${formatDate(contribution.contributedAt)} will be added to the official ledger. This can't be undone from here.`}
+        confirmLabel="Approve"
+        pendingLabel="Approving…"
+        onConfirm={handleApprove}
+      />
       <RejectContributionDialog contributionId={contribution.id} open={rejectOpen} onOpenChange={setRejectOpen} />
     </div>
   );

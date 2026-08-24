@@ -8,6 +8,10 @@ export function formatAmount(amount: number): string {
   return `${amount.toLocaleString('en-US')} RWF`;
 }
 
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 // A period is always the first day of its month. The date picker lets
 // someone click any day, so whichever one they land on is truncated here —
 // mirroring the same truncation ContributionsService.setSharePrice applies
