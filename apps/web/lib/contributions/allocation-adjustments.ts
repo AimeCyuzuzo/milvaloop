@@ -16,16 +16,33 @@ function isStacked(line: AllocationProposalLine): boolean {
   return line.amount > line.sharePriceAmount;
 }
 
-// True whenever there's a valid move in either direction: merging the tail
-// backward needs a previous line to merge into, but splitting a stacked
-// tail back out doesn't — it only needs the last line to actually be
-// stacked, even if that's the only line left in the proposal.
+// A line can only absorb a stacked surplus if this contribution is the
+// first thing to touch it — otherwise "extra shares this period" and
+// "closing out a month that was already partially paid before today"
+// get conflated onto one line, which doesn't mean anything coherent (the
+// month is done; the surplus isn't "extra shares in July," it's just
+// unrelated money that happens to land on July's line).
+function canAbsorbSurplus(line: AllocationProposalLine): boolean {
+  return line.alreadyPaidBefore === 0;
+}
+
+// True whenever there's a valid move in either direction: splitting a
+// stacked tail back out only needs the last line to actually be stacked,
+// even if that's the only line left in the proposal. Merging the tail
+// backward needs a previous line to merge into *and* that line has to be
+// one this contribution is touching for the first time (see
+// canAbsorbSurplus) — if the previous line already had money on it before
+// today, there's nothing valid to offer.
 export function canAdjustTail(lines: AllocationProposalLine[]): boolean {
   const last = lastOf(lines);
   if (!last) {
     return false;
   }
-  return lines.length >= 2 || isStacked(last);
+  if (isStacked(last)) {
+    return true;
+  }
+  const previous = lines[lines.length - 2];
+  return previous !== undefined && canAbsorbSurplus(previous);
 }
 
 function lastOf(lines: AllocationProposalLine[]): AllocationProposalLine | undefined {
@@ -48,11 +65,14 @@ export function tailToggleLabel(lines: AllocationProposalLine[]): string {
 }
 
 // Folds the last line into the one before it — the "keep it as extra
-// shares here, don't advance it" choice.
+// shares here, don't advance it" choice. Refuses if `previous` already
+// had money on it before this contribution (see canAbsorbSurplus) — the
+// same rule canAdjustTail uses to decide whether to offer this at all,
+// enforced here too so this is never wrong to call.
 export function stackLastLine(lines: AllocationProposalLine[]): AllocationProposalLine[] {
   const last = lastOf(lines);
   const previous = lines[lines.length - 2];
-  if (!last || !previous) {
+  if (!last || !previous || !canAbsorbSurplus(previous)) {
     return lines;
   }
   const merged: AllocationProposalLine = {
