@@ -22,11 +22,17 @@ export const allocationLineSchema = z.object({
 });
 export type AllocationLine = z.infer<typeof allocationLineSchema>;
 
-// Returned by POST /contributions/preview and embedded in a recorded
-// contribution's detail — the same shape whether it's a proposal being
-// shown for confirmation or a record of what was actually allocated.
+// Returned by POST /contributions/preview — enough for the UI to show why
+// a line is what it is (already partially paid? being paid ahead of time?)
+// and to compute the one adjustment it allows (folding a trailing advance
+// back into the period before it, or splitting it back out) without a
+// second round trip. `alreadyPaidBefore` and `resultingStatus` both reflect
+// the period's total after this proposal, not just this line's own amount —
+// a line completing an existing partial has a small `amount` but a
+// `resultingStatus` of 'satisfied' once `alreadyPaidBefore` is added in.
 export const allocationProposalLineSchema = allocationLineSchema.extend({
   sharePriceAmount: z.number().int().positive(),
+  alreadyPaidBefore: z.number().int().nonnegative(),
   resultingStatus: z.enum(['satisfied', 'partial']),
 });
 export type AllocationProposalLine = z.infer<typeof allocationProposalLineSchema>;

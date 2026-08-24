@@ -207,15 +207,27 @@ export class ContributionsService {
       input.amount,
       latestPrice.amount,
     );
+    const alreadyPaidByPeriod = new Map(
+      periods.map((period) => [period.period, period.paidAmount]),
+    );
     return {
+      // `resultingStatus` reflects the period's total after this proposal,
+      // not just this line's own amount — a line completing an existing
+      // partial has a small `amount` but is genuinely 'satisfied' once
+      // what was already there is added back in.
       lines: lines.map((line) => {
         const dueAmount =
           priceAsOf(sharePriceRows, line.period)?.amount ?? latestPrice.amount;
+        const alreadyPaidBefore = alreadyPaidByPeriod.get(line.period) ?? 0;
         return {
           period: line.period,
           amount: line.amount,
           sharePriceAmount: dueAmount,
-          resultingStatus: line.amount >= dueAmount ? 'satisfied' : 'partial',
+          alreadyPaidBefore,
+          resultingStatus:
+            alreadyPaidBefore + line.amount >= dueAmount
+              ? 'satisfied'
+              : 'partial',
         };
       }),
     };

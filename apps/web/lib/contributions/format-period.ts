@@ -21,3 +21,16 @@ export function toPeriodStart(isoDate: string): string {
 export function currentPeriod(): string {
   return toPeriodStart(new Date().toISOString());
 }
+
+// The first day of the month after `period` — mirrors
+// contributions-waterfall.ts's identical helper on the backend. Duplicated
+// rather than shared for the same reason currentPeriod's truncation logic
+// is: the two sides have no other reason to depend on each other.
+export function nextPeriod(period: string): string {
+  const parts = period.split('-').map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 0;
+  const next = new Date(Date.UTC(year, month, 1));
+  const nextMonth = String(next.getUTCMonth() + 1).padStart(2, '0');
+  return `${next.getUTCFullYear()}-${nextMonth}-01`;
+}

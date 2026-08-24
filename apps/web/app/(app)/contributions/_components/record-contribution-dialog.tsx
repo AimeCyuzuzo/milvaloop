@@ -5,10 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import type { AllocationLine } from '@milvaloop/types';
+import type { AllocationProposalLine } from '@milvaloop/types';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
+import { DatePicker } from '@milvaloop/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -18,14 +19,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@milvaloop/ui/dialog';
-import { DatePicker } from '@milvaloop/ui/date-picker';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { getErrorMessage } from '@/lib/api/api-fetch';
-import { currentPeriod, formatAmount, formatPeriodLabel, toPeriodStart } from '@/lib/contributions/format-period';
+import { canAdjustTail, describeAllocationLine, tailToggleLabel, toggleTail } from '@/lib/contributions/allocation-adjustments';
+import { formatAmount, formatPeriodLabel } from '@/lib/contributions/format-period';
 import { usePreviewAllocationMutation, useRecordContributionMutation } from '@/lib/contributions/use-contribution-mutations';
 import { applyServerError } from '@/lib/forms/apply-server-error';
 import { useMembersQuery } from '@/lib/members/use-members-query';
@@ -47,15 +48,17 @@ function emptyDetails(): DetailsValues {
 }
 
 // Two steps: the essentials (who, how much, when), then the system's
-// waterfall proposal for how that money applies — shown before anything is
-// written, editable via "Adjust allocation" rather than ever applied
-// silently (see the feature plan's explicit-allocation rule).
+// waterfall proposal for how that money applies. The proposal is always
+// valid on its own; the only adjustment offered is the one at the tail
+// (see allocation-adjustments.ts) — never a blank period/amount field,
+// since that's exactly what let someone construct a combination that
+// looked plausible on screen but would never have been accepted (or,
+// worse, quietly meant something they didn't intend).
 export function RecordContributionDialog() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'details' | 'preview'>('details');
   const [details, setDetails] = useState<DetailsValues | null>(null);
-  const [allocations, setAllocations] = useState<AllocationLine[]>([]);
-  const [adjusting, setAdjusting] = useState(false);
+  const [allocations, setAllocations] = useState<AllocationProposalLine[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   const { data: membersData } = useMembersQuery();
@@ -73,7 +76,6 @@ export function RecordContributionDialog() {
     setStep('details');
     setDetails(null);
     setAllocations([]);
-    setAdjusting(false);
     setFormError(null);
     form.reset(emptyDetails());
   }
@@ -82,9 +84,8 @@ export function RecordContributionDialog() {
     setFormError(null);
     try {
       const response = await preview.mutateAsync({ membershipId: values.membershipId, amount: values.amount });
-      setAllocations(response.lines.map((line) => ({ period: line.period, amount: line.amount })));
+      setAllocations(response.lines);
       setDetails(values);
-      setAdjusting(false);
       setStep('preview');
     } catch (error) {
       const message = applyServerError(form, error);
@@ -92,25 +93,6 @@ export function RecordContributionDialog() {
         setFormError(message);
       }
     }
-  }
-
-  const allocatedTotal = allocations.reduce((total, line) => total + line.amount, 0);
-  const remaining = (details?.amount ?? 0) - allocatedTotal;
-
-  function updateAllocationAmount(index: number, amount: number) {
-    setAllocations((current) => current.map((line, i) => (i === index ? { ...line, amount } : line)));
-  }
-
-  function updateAllocationPeriod(index: number, period: string) {
-    setAllocations((current) => current.map((line, i) => (i === index ? { ...line, period } : line)));
-  }
-
-  function removeAllocation(index: number) {
-    setAllocations((current) => current.filter((_, i) => i !== index));
-  }
-
-  function addAllocation() {
-    setAllocations((current) => [...current, { period: currentPeriod(), amount: 0 }]);
   }
 
   async function handleConfirm() {
@@ -124,7 +106,7 @@ export function RecordContributionDialog() {
         amount: details.amount,
         contributedAt: details.contributedAt,
         note: details.note || undefined,
-        allocations,
+        allocations: allocations.map((line) => ({ period: line.period, amount: line.amount })),
       });
       toast.success('Contribution recorded — awaiting approval.');
       setOpen(false);
@@ -248,60 +230,33 @@ export function RecordContributionDialog() {
           </Form>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {allocations.map((line, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  {adjusting ? (
-                    <>
-                      <div className="flex-1">
-                        <DatePicker
-                          value={line.period}
-                          onChange={(value) => updateAllocationPeriod(index, toPeriodStart(value))}
-                        />
-                      </div>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={line.amount}
-                        onChange={(event) => updateAllocationAmount(index, event.target.valueAsNumber || 0)}
-                      />
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeAllocation(index)}>
-                        Remove
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <Typography variant="small">{formatPeriodLabel(line.period)}</Typography>
-                      <Typography variant="small">{formatAmount(line.amount)}</Typography>
-                    </div>
-                  )}
+                <div key={line.period} className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col">
+                    <Typography variant="small">{formatPeriodLabel(line.period)}</Typography>
+                    <Typography variant="small" color="muted">
+                      {describeAllocationLine(line, index)}
+                    </Typography>
+                  </div>
+                  <Typography variant="small">{formatAmount(line.amount)}</Typography>
                 </div>
               ))}
             </div>
 
-            {adjusting ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={addAllocation}>
-                  Add a month
+            {canAdjustTail(allocations) ? (
+              <div className="self-start">
+                <Button type="button" variant="link" size="sm" onClick={() => setAllocations(toggleTail(allocations))}>
+                  {tailToggleLabel(allocations)}
                 </Button>
-                <Typography variant="small" color={remaining === 0 ? 'muted' : 'accent'}>
-                  {remaining === 0
-                    ? 'Fully allocated'
-                    : `${formatAmount(Math.abs(remaining))} ${remaining > 0 ? 'unallocated' : 'over-allocated'}`}
-                </Typography>
               </div>
-            ) : (
-              <Button type="button" variant="outline" size="sm" onClick={() => setAdjusting(true)}>
-                Adjust allocation
-              </Button>
-            )}
+            ) : null}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setStep('details')}>
                 Back
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={remaining !== 0 || record.isPending}>
+              <Button type="button" onClick={handleConfirm} disabled={record.isPending}>
                 {record.isPending ? 'Recording…' : 'Confirm'}
               </Button>
             </DialogFooter>

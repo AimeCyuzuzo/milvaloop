@@ -283,6 +283,41 @@ describe('Contributions (e2e)', () => {
             period: currentPeriod(),
             amount: SHARE_PRICE,
             sharePriceAmount: SHARE_PRICE,
+            alreadyPaidBefore: 0,
+            resultingStatus: 'satisfied',
+          },
+        ],
+      });
+    });
+
+    it('reports a line completing an existing partial as satisfied, not partial', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const firstPayment = await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        30_000,
+      );
+      expect(firstPayment.status).toBe(204);
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/preview')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ membershipId: founderMembershipId, amount: 20_000 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        lines: [
+          {
+            period: currentPeriod(),
+            amount: 20_000,
+            sharePriceAmount: SHARE_PRICE,
+            alreadyPaidBefore: 30_000,
             resultingStatus: 'satisfied',
           },
         ],
