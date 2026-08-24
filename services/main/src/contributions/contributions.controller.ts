@@ -86,18 +86,26 @@ export class ContributionsController {
     );
   }
 
-  // No point previewing an allocation you're not permitted to record. 200,
+  // Every active member may preview/record a contribution for themselves —
+  // no permission needed for that. Recording for someone else still needs
+  // CONTRIBUTIONS_RECORD (or TENANT_ADMIN); that's a per-target decision
+  // the service makes, since it depends on whose membershipId is in the
+  // body, so PermissionsGuard's blanket allow/deny can't express it. 200,
   // not the POST default of 201 — a preview creates nothing.
   @Post('preview')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AccessTokenGuard, PermissionsGuard)
-  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_RECORD)
+  @UseGuards(AccessTokenGuard)
   async preview(
     @CurrentUser() claims: AccessTokenClaims,
     @Body(new ZodValidationPipe(previewAllocationSchema))
     body: PreviewAllocationInput,
   ) {
-    return this.contributionsService.previewAllocation(claims.tenantId, body);
+    return this.contributionsService.previewAllocation(
+      claims.tenantId,
+      claims.sub,
+      claims.permissions,
+      body,
+    );
   }
 
   // No content, not 201 — recordContribution returns void (the caller
@@ -106,8 +114,7 @@ export class ContributionsController {
   // shouldn't have to work around.
   @Post()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(AccessTokenGuard, PermissionsGuard)
-  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_RECORD)
+  @UseGuards(AccessTokenGuard)
   async record(
     @CurrentUser() claims: AccessTokenClaims,
     @Body(new ZodValidationPipe(recordContributionSchema))
@@ -116,6 +123,7 @@ export class ContributionsController {
     await this.contributionsService.recordContribution(
       claims.tenantId,
       claims.sub,
+      claims.permissions,
       body,
     );
   }

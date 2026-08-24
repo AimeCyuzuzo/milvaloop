@@ -9,7 +9,8 @@ import {
 } from '@nestjs/common';
 import { and, eq, isNull, schema, type Database } from '@milvaloop/db';
 import {
-  ContributionRecordedEmail,
+  ContributionApprovedEmail,
+  ContributionPendingApprovalEmail,
   renderEmail,
   type Mailer,
 } from '@milvaloop/email';
@@ -184,8 +185,21 @@ export class ContributionsService {
 
   async previewAllocation(
     tenantId: string,
+    callerUserId: string,
+    callerPermissions: string[],
     input: PreviewAllocationInput,
   ): Promise<PreviewAllocationResponse> {
+    const callerMembershipId = await this.resolveActiveMembershipId(
+      this.db,
+      tenantId,
+      callerUserId,
+    );
+    this.assertCanRecordFor(
+      callerMembershipId,
+      callerPermissions,
+      input.membershipId,
+    );
+
     const { periods, sharePriceRows } = await this.loadOutstandingPeriods(
       tenantId,
       input.membershipId,
@@ -236,6 +250,7 @@ export class ContributionsService {
   async recordContribution(
     tenantId: string,
     recordedByUserId: string,
+    callerPermissions: string[],
     input: RecordContributionInput,
   ): Promise<void> {
     const allocationSum = input.allocations.reduce(
@@ -248,11 +263,16 @@ export class ContributionsService {
       );
     }
 
-    await this.db.transaction(async (tx) => {
+    const contribution = await this.db.transaction(async (tx) => {
       const recordedByMembershipId = await this.resolveActiveMembershipId(
         tx,
         tenantId,
         recordedByUserId,
+      );
+      this.assertCanRecordFor(
+        recordedByMembershipId,
+        callerPermissions,
+        input.membershipId,
       );
 
       const [member] = await tx
@@ -317,7 +337,11 @@ export class ContributionsService {
           allocations: input.allocations,
         },
       });
+
+      return contribution;
     });
+
+    await this.sendPendingApprovalEmail(tenantId, contribution);
   }
 
   async approveContribution(
@@ -364,7 +388,7 @@ export class ContributionsService {
       return contribution;
     });
 
-    await this.sendRecordedEmail(tenantId, approved);
+    await this.sendApprovedEmail(tenantId, approved);
   }
 
   async rejectContribution(
@@ -545,11 +569,11 @@ export class ContributionsService {
   }
 
   private async resolveActiveMembershipId(
-    tx: Transaction,
+    executor: Database | Transaction,
     tenantId: string,
     userId: string,
   ): Promise<string> {
-    const [membership] = await tx
+    const [membership] = await executor
       .select({ id: memberships.id })
       .from(memberships)
       .where(
@@ -631,6 +655,49 @@ export class ContributionsService {
     return contribution;
   }
 
+  // Every active member may record a contribution for themselves — that's
+  // the whole point of self-reporting instead of relying on an officer to
+  // enter it. Recording for someone else still needs CONTRIBUTIONS_RECORD
+  // (or TENANT_ADMIN), same as before this existed.
+  private assertCanRecordFor(
+    callerMembershipId: string,
+    callerPermissions: string[],
+    targetMembershipId: string,
+  ): void {
+    if (targetMembershipId === callerMembershipId) {
+      return;
+    }
+    const canRecordForOthers =
+      callerPermissions.includes(PERMISSIONS.CONTRIBUTIONS_RECORD) ||
+      callerPermissions.includes(PERMISSIONS.TENANT_ADMIN);
+    if (!canRecordForOthers) {
+      throw new ForbiddenException(
+        'You can only record a contribution for yourself',
+      );
+    }
+  }
+
+  // Every active membership in the tenant that can currently act as an
+  // approver — shared by the self-approval check (which only needs the
+  // count) and the pending-approval notification (which needs who they
+  // are, to email them).
+  private async loadEligibleApproverMemberships(
+    executor: Database | Transaction,
+    tenantId: string,
+  ): Promise<Array<{ id: string; permissions: string[] }>> {
+    const rows = await executor
+      .select({ id: memberships.id, permissions: memberships.permissions })
+      .from(memberships)
+      .where(
+        and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
+      );
+    return rows.filter(
+      (row) =>
+        row.permissions.includes(PERMISSIONS.CONTRIBUTIONS_APPROVE) ||
+        row.permissions.includes(PERMISSIONS.TENANT_ADMIN),
+    );
+  }
+
   // Recorder ≠ approver, unless the recorder is the only membership in the
   // tenant currently eligible to approve at all — in which case full
   // transparency (every member can see every contribution) is the
@@ -645,19 +712,12 @@ export class ContributionsService {
       return;
     }
 
-    const rows = await tx
-      .select({ permissions: memberships.permissions })
-      .from(memberships)
-      .where(
-        and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
-      );
-    const eligibleApprovers = rows.filter(
-      (row) =>
-        row.permissions.includes(PERMISSIONS.CONTRIBUTIONS_APPROVE) ||
-        row.permissions.includes(PERMISSIONS.TENANT_ADMIN),
-    ).length;
+    const eligibleApprovers = await this.loadEligibleApproverMemberships(
+      tx,
+      tenantId,
+    );
 
-    if (eligibleApprovers > 1) {
+    if (eligibleApprovers.length > 1) {
       throw new ForbiddenException(
         'Someone else needs to approve this contribution',
       );
@@ -839,7 +899,15 @@ export class ContributionsService {
     return new Map(rows.map((row) => [row.membershipId, row.email]));
   }
 
-  private async sendRecordedEmail(
+  private async loadPeriodLabel(contributionId: string): Promise<string> {
+    const allocations = await this.db
+      .select({ period: contributionAllocations.period })
+      .from(contributionAllocations)
+      .where(eq(contributionAllocations.contributionId, contributionId));
+    return allocations.map((row) => formatPeriodLabel(row.period)).join(', ');
+  }
+
+  private async sendApprovedEmail(
     tenantId: string,
     contribution: typeof contributions.$inferSelect,
   ): Promise<void> {
@@ -858,16 +926,10 @@ export class ContributionsService {
       return;
     }
 
-    const allocations = await this.db
-      .select({ period: contributionAllocations.period })
-      .from(contributionAllocations)
-      .where(eq(contributionAllocations.contributionId, contribution.id));
-    const periodLabel = allocations
-      .map((row) => formatPeriodLabel(row.period))
-      .join(', ');
+    const periodLabel = await this.loadPeriodLabel(contribution.id);
 
     const { html, text } = await renderEmail(
-      ContributionRecordedEmail({
+      ContributionApprovedEmail({
         memberName: member.email,
         cooperativeName: tenant.name,
         periodLabel: periodLabel || 'your contribution',
@@ -878,15 +940,84 @@ export class ContributionsService {
     await this.mailer
       .send({
         to: member.email,
-        subject: `Your contribution to ${tenant.name} has been recorded`,
+        subject: `Your contribution to ${tenant.name} has been approved`,
         html,
         text,
       })
       .catch((error: unknown) => {
         this.logger.error(
-          `Failed to send contribution-recorded email for contribution ${contribution.id}`,
+          `Failed to send contribution-approved email for contribution ${contribution.id}`,
           error,
         );
       });
+  }
+
+  // Whoever can approve this gets pinged the moment it's pending — the
+  // point of letting anyone self-report a contribution is that an
+  // approver only has to react to a notification (check the payment
+  // actually arrived, click approve) rather than remember to go looking
+  // for what's outstanding. The recorder themselves is never on this
+  // list — they already know what they just did — so a solo eligible
+  // approver recording their own contribution sends nobody anything.
+  private async sendPendingApprovalEmail(
+    tenantId: string,
+    contribution: typeof contributions.$inferSelect,
+  ): Promise<void> {
+    const eligibleApprovers = (
+      await this.loadEligibleApproverMemberships(this.db, tenantId)
+    ).filter((row) => row.id !== contribution.recordedByMembershipId);
+    if (eligibleApprovers.length === 0) {
+      return;
+    }
+
+    const emailByMembershipId = await this.loadMembershipEmails(tenantId);
+    const memberEmail = emailByMembershipId.get(contribution.membershipId);
+    const recorderEmail = emailByMembershipId.get(
+      contribution.recordedByMembershipId,
+    );
+    const [tenant] = await this.db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (!memberEmail || !recorderEmail || !tenant) {
+      return;
+    }
+
+    const periodLabel = await this.loadPeriodLabel(contribution.id);
+    const approveUrl = `${env.WEB_ORIGIN}/contributions`;
+
+    await Promise.all(
+      eligibleApprovers.map(async (approver) => {
+        const approverEmail = emailByMembershipId.get(approver.id);
+        if (!approverEmail) {
+          return;
+        }
+        const { html, text } = await renderEmail(
+          ContributionPendingApprovalEmail({
+            approverName: approverEmail,
+            recorderName: recorderEmail,
+            memberName: memberEmail,
+            cooperativeName: tenant.name,
+            periodLabel: periodLabel || 'a contribution',
+            amount: contribution.amount,
+            approveUrl,
+          }),
+        );
+        await this.mailer
+          .send({
+            to: approverEmail,
+            subject: `A contribution to ${tenant.name} needs your approval`,
+            html,
+            text,
+          })
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Failed to send pending-approval email for contribution ${contribution.id} to ${approverEmail}`,
+              error,
+            );
+          });
+      }),
+    );
   }
 }

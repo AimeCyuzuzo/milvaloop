@@ -43,8 +43,33 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function emptyDetails(): DetailsValues {
-  return { membershipId: '', amount: 0, contributedAt: todayIsoDate(), note: '' };
+interface RecordContributionDialogProps {
+  triggerLabel: string;
+  // Set for the self-service entry point: locks the form to this member
+  // and hides the picker entirely, so anyone can log their own payment
+  // without needing CONTRIBUTIONS_RECORD (the service enforces the same
+  // rule independently — this only saves the trip of picking yourself
+  // from a list of one meaningful choice).
+  fixedMembershipId?: string;
+  // A sensible starting point for the amount field — the cooperative's
+  // current share price, for someone who almost always pays exactly one
+  // share. Still freely editable for a partial or lump-sum payment.
+  defaultAmount?: number;
+  detailsDescription?: string;
+  // Folding a trailing advance into extra shares this month vs. starting
+  // a new one is a distribution preference an officer might deliberately
+  // want to control. It's not a decision a member self-reporting their
+  // own payment needs to make — they just want to say what they paid.
+  showAdvanced?: boolean;
+}
+
+function emptyDetails(fixedMembershipId: string | undefined, defaultAmount: number | undefined): DetailsValues {
+  return {
+    membershipId: fixedMembershipId ?? '',
+    amount: defaultAmount ?? 0,
+    contributedAt: todayIsoDate(),
+    note: '',
+  };
 }
 
 // Two steps: the essentials (who, how much, when), then the system's
@@ -54,7 +79,13 @@ function emptyDetails(): DetailsValues {
 // since that's exactly what let someone construct a combination that
 // looked plausible on screen but would never have been accepted (or,
 // worse, quietly meant something they didn't intend).
-export function RecordContributionDialog() {
+export function RecordContributionDialog({
+  triggerLabel,
+  fixedMembershipId,
+  defaultAmount,
+  detailsDescription = 'Who paid, how much, and when.',
+  showAdvanced = true,
+}: RecordContributionDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'details' | 'preview'>('details');
   const [details, setDetails] = useState<DetailsValues | null>(null);
@@ -69,7 +100,7 @@ export function RecordContributionDialog() {
 
   const form = useForm<DetailsValues>({
     resolver: zodResolver(detailsSchema),
-    defaultValues: emptyDetails(),
+    defaultValues: emptyDetails(fixedMembershipId, defaultAmount),
   });
 
   function reset() {
@@ -77,7 +108,7 @@ export function RecordContributionDialog() {
     setDetails(null);
     setAllocations([]);
     setFormError(null);
-    form.reset(emptyDetails());
+    form.reset(emptyDetails(fixedMembershipId, defaultAmount));
   }
 
   async function onSubmitDetails(values: DetailsValues) {
@@ -127,14 +158,14 @@ export function RecordContributionDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>Record a contribution</Button>
+        <Button>{triggerLabel}</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Record a contribution</DialogTitle>
+          <DialogTitle>{triggerLabel}</DialogTitle>
           <DialogDescription>
             {step === 'details'
-              ? 'Who paid, how much, and when.'
+              ? detailsDescription
               : 'This is how the payment will be applied — review it before confirming.'}
           </DialogDescription>
         </DialogHeader>
@@ -147,32 +178,34 @@ export function RecordContributionDialog() {
         {step === 'details' ? (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmitDetails)} className="flex flex-col gap-4">
-              <FormField
-                control={form.control}
-                name="membershipId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Member</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a member" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {activeMembers.map((member) =>
-                          member.status === 'active' ? (
-                            <SelectItem key={member.membershipId} value={member.membershipId}>
-                              {member.email}
-                            </SelectItem>
-                          ) : null,
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {fixedMembershipId ? null : (
+                <FormField
+                  control={form.control}
+                  name="membershipId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Member</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a member" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {activeMembers.map((member) =>
+                            member.status === 'active' ? (
+                              <SelectItem key={member.membershipId} value={member.membershipId}>
+                                {member.email}
+                              </SelectItem>
+                            ) : null,
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="amount"
@@ -244,7 +277,7 @@ export function RecordContributionDialog() {
               ))}
             </div>
 
-            {canAdjustTail(allocations) ? (
+            {showAdvanced && canAdjustTail(allocations) ? (
               <div className="self-start">
                 <Button type="button" variant="link" size="sm" onClick={() => setAllocations(toggleTail(allocations))}>
                   {tailToggleLabel(allocations)}

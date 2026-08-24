@@ -8,6 +8,7 @@ import { Typography } from '@milvaloop/ui/typography';
 
 import { useHasPermission } from '@/lib/auth/use-permissions';
 import { formatAmount } from '@/lib/contributions/format-period';
+import { useMyMembershipId } from '@/lib/contributions/use-my-membership-id';
 import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-query';
 
 import { ContributionsTable } from './_components/contributions-table';
@@ -19,8 +20,9 @@ import { SetSharePriceDialog } from './_components/set-share-price-dialog';
 // AppLayout + page-headers.ts), not here — this page only owns its content.
 export default function ContributionsPage() {
   const { data: settings, isPending } = useShareSettingsQuery();
-  const canRecord = useHasPermission(PERMISSIONS.CONTRIBUTIONS_RECORD);
+  const canRecordForOthers = useHasPermission(PERMISSIONS.CONTRIBUTIONS_RECORD);
   const canManageSettings = useHasPermission(PERMISSIONS.CONTRIBUTIONS_SETTINGS);
+  const myMembershipId = useMyMembershipId();
 
   if (isPending) {
     return (
@@ -62,7 +64,17 @@ export default function ContributionsPage() {
         </Typography>
         <div className="flex items-center gap-2">
           {canManageSettings ? <SetSharePriceDialog triggerLabel="Change share price" /> : null}
-          {canRecord ? <RecordContributionDialog /> : null}
+          {canRecordForOthers ? (
+            <RecordContributionDialog triggerLabel="Record a contribution" />
+          ) : myMembershipId ? (
+            <RecordContributionDialog
+              triggerLabel="Record my contribution"
+              fixedMembershipId={myMembershipId}
+              defaultAmount={settings.current.amount}
+              detailsDescription="How much did you pay, and when? An admin will confirm it before it counts."
+              showAdvanced={false}
+            />
+          ) : null}
         </div>
       </div>
 

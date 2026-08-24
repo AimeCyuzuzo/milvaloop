@@ -98,6 +98,26 @@ describe('Contributions (e2e)', () => {
     return member.membershipId;
   }
 
+  // Once a tenant has more than one member, `activeMembershipId` (which
+  // just takes the list's first entry) can no longer be trusted to return
+  // a specific caller's own membership — this looks it up by email
+  // instead, for tests that need a non-founder member's own id.
+  async function membershipIdByEmail(
+    token: string,
+    email: string,
+  ): Promise<string> {
+    const list = await request(app.getHttpServer())
+      .get('/members')
+      .set('Authorization', `Bearer ${token}`);
+    const member = bodyAs<MemberListResponse>(list).members.find(
+      (candidate) => candidate.email === email,
+    );
+    if (!member || member.status !== 'active') {
+      throw new Error(`Expected an active member with email ${email}`);
+    }
+    return member.membershipId;
+  }
+
   async function inviteAndAccept(
     founderToken: string,
     email: string,
@@ -443,8 +463,53 @@ describe('Contributions (e2e)', () => {
     });
   });
 
+  describe('pending-approval notifications', () => {
+    it('emails eligible approvers, excluding the recorder, when a contribution is recorded', async () => {
+      const founder = await signupFounder();
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'self-reporter@example.com',
+        [],
+      );
+      const plainMemberId = await membershipIdByEmail(
+        founder.accessToken,
+        'self-reporter@example.com',
+      );
+
+      await recordContribution(
+        plainMember.accessToken,
+        plainMemberId,
+        SHARE_PRICE,
+      );
+
+      const pendingApprovalEmail = sentEmails.find((email) =>
+        email.subject.includes('needs your approval'),
+      );
+      expect(pendingApprovalEmail?.to).toBe(FOUNDER.email);
+    });
+
+    it('sends no pending-approval email when the recorder is the only eligible approver', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+
+      expect(
+        sentEmails.some((email) =>
+          email.subject.includes('needs your approval'),
+        ),
+      ).toBe(false);
+    });
+  });
+
   describe('permissions and tenant isolation', () => {
-    it('rejects recording without contributions:record', async () => {
+    it('rejects recording for someone else without contributions:record', async () => {
       const founder = await signupFounder();
       const founderMembershipId = await activeMembershipId(founder.accessToken);
       await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
@@ -459,6 +524,50 @@ describe('Contributions (e2e)', () => {
         founderMembershipId,
         SHARE_PRICE,
       );
+      expect(response.status).toBe(403);
+    });
+
+    it('lets any active member record a contribution for themselves without contributions:record', async () => {
+      const founder = await signupFounder();
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'selfrecord@example.com',
+        [],
+      );
+      const plainMemberId = await membershipIdByEmail(
+        founder.accessToken,
+        'selfrecord@example.com',
+      );
+
+      const preview = await request(app.getHttpServer())
+        .post('/contributions/preview')
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ membershipId: plainMemberId, amount: SHARE_PRICE });
+      expect(preview.status).toBe(200);
+
+      const response = await recordContribution(
+        plainMember.accessToken,
+        plainMemberId,
+        SHARE_PRICE,
+      );
+      expect(response.status).toBe(204);
+    });
+
+    it('rejects previewing an allocation for someone else without contributions:record', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'nopreview@example.com',
+        [],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/preview')
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ membershipId: founderMembershipId, amount: SHARE_PRICE });
       expect(response.status).toBe(403);
     });
 
