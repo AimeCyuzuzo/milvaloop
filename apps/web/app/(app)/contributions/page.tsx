@@ -1,23 +1,26 @@
 'use client';
 
+import Link from 'next/link';
 import { PERMISSIONS } from '@milvaloop/types';
 
+import { Button } from '@milvaloop/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { useHasPermission } from '@/lib/auth/use-permissions';
 import { formatAmount } from '@/lib/contributions/format-period';
-import { useMyMembershipId } from '@/lib/contributions/use-my-membership-id';
+import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-query';
 
 import { ContributionsTable } from './_components/contributions-table';
 import { MemberSummaryCard } from './_components/member-summary-card';
 import { RecordContributionDialog } from './_components/record-contribution-dialog';
-import { SetSharePriceDialog } from './_components/set-share-price-dialog';
 
 // The page title/description live in the app shell's top bar (see
 // AppLayout + page-headers.ts), not here — this page only owns its content.
+// Setting or changing the share price itself lives on Settings, not here —
+// one home for that action rather than two (see settings/page.tsx).
 export default function ContributionsPage() {
   const { data: settings, isPending } = useShareSettingsQuery();
   const canRecordForOthers = useHasPermission(PERMISSIONS.CONTRIBUTIONS_RECORD);
@@ -45,7 +48,11 @@ export default function ContributionsPage() {
         </CardHeader>
         <CardContent>
           {canManageSettings ? (
-            <SetSharePriceDialog triggerLabel="Set up contributions" />
+            <div className="w-fit">
+              <Button asChild>
+                <Link href="/settings">Go to Settings</Link>
+              </Button>
+            </div>
           ) : (
             <Typography variant="small" color="muted">
               Ask an admin to set this up.
@@ -62,20 +69,17 @@ export default function ContributionsPage() {
         <Typography variant="small" color="muted">
           Share price: {formatAmount(settings.current.amount)}
         </Typography>
-        <div className="flex items-center gap-2">
-          {canManageSettings ? <SetSharePriceDialog triggerLabel="Change share price" /> : null}
-          {canRecordForOthers ? (
-            <RecordContributionDialog triggerLabel="Record a contribution" />
-          ) : myMembershipId ? (
-            <RecordContributionDialog
-              triggerLabel="Record my contribution"
-              fixedMembershipId={myMembershipId}
-              defaultAmount={settings.current.amount}
-              detailsDescription="How much did you pay, and when? An admin will confirm it before it counts."
-              showAdvanced={false}
-            />
-          ) : null}
-        </div>
+        {canRecordForOthers ? (
+          <RecordContributionDialog triggerLabel="Record a contribution" />
+        ) : myMembershipId ? (
+          <RecordContributionDialog
+            triggerLabel="Record my contribution"
+            fixedMembershipId={myMembershipId}
+            defaultAmount={settings.current.amount}
+            detailsDescription="How much did you pay, and when? An admin will confirm it before it counts."
+            showAdvanced={false}
+          />
+        ) : null}
       </div>
 
       <MemberSummaryCard />

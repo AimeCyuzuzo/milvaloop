@@ -62,6 +62,7 @@ export class MembersService {
         email: users.email,
         permissions: memberships.permissions,
         joinedAt: memberships.createdAt,
+        remindersPausedAt: memberships.remindersPausedAt,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
@@ -95,6 +96,7 @@ export class MembersService {
           email: row.email,
           permissions: row.permissions,
           joinedAt: row.joinedAt.toISOString(),
+          remindersPausedAt: row.remindersPausedAt?.toISOString() ?? null,
         })),
         ...inviteRows.map((row) => ({
           status: 'invited' as const,
@@ -294,6 +296,67 @@ export class MembersService {
           before: membership.permissions,
           after: nextPermissions,
         },
+      });
+    });
+  }
+
+  // Whether this member gets the daily contribution-reminder cron's
+  // emails (see ContributionReminderService) — a personal preference, not
+  // an admin lever: no permission check gates this beyond being the
+  // member it's about, same as changing your own password would be. A
+  // no-op call (pausing an already-paused membership, or resuming one
+  // that isn't paused) writes nothing and logs nothing — an audit entry
+  // describes a change that happened, not a request that happened to
+  // match the current state.
+  async updateReminderPause(
+    tenantId: string,
+    actorUserId: string,
+    membershipId: string,
+    paused: boolean,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const [membership] = await tx
+        .select({
+          userId: memberships.userId,
+          remindersPausedAt: memberships.remindersPausedAt,
+          email: users.email,
+        })
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
+        .where(
+          and(
+            eq(memberships.id, membershipId),
+            eq(memberships.tenantId, tenantId),
+            isNull(memberships.removedAt),
+          ),
+        )
+        .limit(1);
+      if (!membership) {
+        throw new NotFoundException('No active member found');
+      }
+      if (membership.userId !== actorUserId) {
+        throw new ForbiddenException(
+          'You can only manage your own reminder preference',
+        );
+      }
+
+      const isCurrentlyPaused = membership.remindersPausedAt !== null;
+      if (isCurrentlyPaused === paused) {
+        return;
+      }
+
+      await tx
+        .update(memberships)
+        .set({ remindersPausedAt: paused ? new Date() : null })
+        .where(eq(memberships.id, membershipId));
+
+      await this.auditLog.record(tx, {
+        tenantId,
+        actorUserId,
+        action: paused ? 'member.reminders_paused' : 'member.reminders_resumed',
+        entityType: 'membership',
+        entityId: membershipId,
+        metadata: { email: membership.email },
       });
     });
   }

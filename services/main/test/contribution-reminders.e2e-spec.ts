@@ -106,13 +106,23 @@ describe('Contribution reminders (e2e)', () => {
   // testing an overdue period genuinely in the past means backdating the
   // membership itself, not just the share price — there's no product-level
   // way to do this (a membership's join date isn't editable), so this goes
-  // straight at the test database, the same way `remindersPausedAt` does
-  // below.
+  // straight at the test database.
   async function backdateMembership(membershipId: string, createdAt: Date) {
     await testDb.db
       .update(memberships)
       .set({ createdAt })
       .where(eq(memberships.id, membershipId));
+  }
+
+  async function pauseReminders(
+    token: string,
+    membershipId: string,
+    paused: boolean,
+  ) {
+    return request(app.getHttpServer())
+      .patch(`/members/${membershipId}/reminders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ paused });
   }
 
   async function recordAndApprove(
@@ -276,10 +286,12 @@ describe('Contribution reminders (e2e)', () => {
     const founder = await signupFounder();
     const founderMembershipId = await activeMembershipId(founder.accessToken);
     await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
-    await testDb.db
-      .update(memberships)
-      .set({ remindersPausedAt: new Date() })
-      .where(eq(memberships.id, founderMembershipId));
+    const pauseResponse = await pauseReminders(
+      founder.accessToken,
+      founderMembershipId,
+      true,
+    );
+    expect(pauseResponse.status).toBe(204);
     clearSentEmails();
 
     await reminderService.sendDailyReminders();
@@ -289,6 +301,27 @@ describe('Contribution reminders (e2e)', () => {
     ).toHaveLength(0);
     const rows = await testDb.db.select().from(schema.contributionReminders);
     expect(rows).toHaveLength(0);
+  });
+
+  it('resumes reminders for a member who was paused', async () => {
+    const founder = await signupFounder();
+    const founderMembershipId = await activeMembershipId(founder.accessToken);
+    await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+    await pauseReminders(founder.accessToken, founderMembershipId, true);
+
+    const resumeResponse = await pauseReminders(
+      founder.accessToken,
+      founderMembershipId,
+      false,
+    );
+    expect(resumeResponse.status).toBe(204);
+    clearSentEmails();
+
+    await reminderService.sendDailyReminders();
+
+    expect(
+      sentEmails.filter((email) => email.to === FOUNDER.email),
+    ).toHaveLength(1);
   });
 
   it("never mixes another tenant's members into a run", async () => {

@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@milvaloop/ui/tooltip';
 import { useHasPermission } from '@/lib/auth/use-permissions';
 import { formatAmount, formatDate } from '@/lib/contributions/format-period';
 import { useApproveContributionMutation } from '@/lib/contributions/use-contribution-mutations';
-import { useMyMembershipId } from '@/lib/contributions/use-my-membership-id';
+import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
 import { RejectContributionDialog } from './reject-contribution-dialog';

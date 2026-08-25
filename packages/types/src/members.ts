@@ -30,6 +30,13 @@ export const updateMemberPermissionsSchema = z.object({
 });
 export type UpdateMemberPermissionsInput = z.infer<typeof updateMemberPermissionsSchema>;
 
+// PATCH /members/:membershipId/reminders — whether this member gets the
+// daily contribution-reminder cron's emails (see
+// ContributionReminderService). A personal preference a member sets for
+// themselves, not an admin lever — independent of permissions/removal.
+export const updateReminderPauseSchema = z.object({ paused: z.boolean() });
+export type UpdateReminderPauseInput = z.infer<typeof updateReminderPauseSchema>;
+
 export const membershipIdParamSchema = z.object({ membershipId: z.uuid() });
 export type MembershipIdParam = z.infer<typeof membershipIdParamSchema>;
 
@@ -74,6 +81,7 @@ export const activeMemberSchema = z.object({
   email: z.email(),
   permissions: z.array(z.string()),
   joinedAt: z.iso.datetime(),
+  remindersPausedAt: z.iso.datetime().nullable(),
 });
 export type ActiveMember = z.infer<typeof activeMemberSchema>;
 

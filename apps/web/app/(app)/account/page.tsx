@@ -11,13 +11,21 @@ import { Button } from '@milvaloop/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
+import { Skeleton } from '@milvaloop/ui/skeleton';
+import { Switch } from '@milvaloop/ui/switch';
+import { Typography } from '@milvaloop/ui/typography';
 
+import { getErrorMessage } from '@/lib/api/api-fetch';
 import { applyServerError } from '@/lib/forms/apply-server-error';
 import { useChangePasswordMutation } from '@/lib/auth/use-auth-mutations';
+import { useUpdateReminderPauseMutation } from '@/lib/members/use-members-mutations';
+import { useMyMembership } from '@/lib/members/use-my-membership';
 
 export default function AccountPage() {
   const changePassword = useChangePasswordMutation();
   const [formError, setFormError] = useState<string | null>(null);
+  const myMembership = useMyMembership();
+  const updateReminderPause = useUpdateReminderPauseMutation();
 
   const form = useForm<ChangePasswordInput>({
     resolver: zodResolver(changePasswordSchema),
@@ -38,8 +46,20 @@ export default function AccountPage() {
     }
   }
 
+  async function handleToggleReminders(enabled: boolean) {
+    if (!myMembership) {
+      return;
+    }
+    try {
+      await updateReminderPause.mutateAsync({ membershipId: myMembership.membershipId, paused: !enabled });
+      toast.success(enabled ? 'Reminders resumed.' : 'Reminders paused.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Change password</CardTitle>
@@ -81,11 +101,34 @@ export default function AccountPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={form.formState.isSubmitting} className="w-fit">
-                {form.formState.isSubmitting ? 'Changing…' : 'Change password'}
-              </Button>
+              <div className="w-fit">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? 'Changing…' : 'Change password'}
+                </Button>
+              </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contribution reminders</CardTitle>
+          <CardDescription>Get a nudge by email when a monthly contribution is due soon or overdue.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!myMembership ? (
+            <Skeleton className="h-6 w-full" />
+          ) : (
+            <div className="flex items-center justify-between gap-4">
+              <Typography variant="small">Email me contribution reminders</Typography>
+              <Switch
+                checked={myMembership.remindersPausedAt === null}
+                onCheckedChange={handleToggleReminders}
+                disabled={updateReminderPause.isPending}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

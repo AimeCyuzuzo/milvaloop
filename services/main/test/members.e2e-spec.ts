@@ -649,6 +649,111 @@ describe('Members (e2e)', () => {
     });
   });
 
+  describe('PATCH /members/:membershipId/reminders', () => {
+    async function activeMember(token: string, email: string) {
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${token}`);
+      const member = bodyAs<MemberListResponse>(list).members.find(
+        (candidate) =>
+          candidate.status === 'active' && candidate.email === email,
+      );
+      if (!member || member.status !== 'active') {
+        throw new Error(`Expected an active member with email ${email}`);
+      }
+      return member;
+    }
+
+    it('pauses and resumes your own reminders, reflected back in the member list', async () => {
+      const founder = await signupFounder();
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'pauseme@example.com',
+        [],
+      );
+      const target = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(target.remindersPausedAt).toBeNull();
+
+      const pauseResponse = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: true });
+      expect(pauseResponse.status).toBe(204);
+
+      const paused = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(paused.remindersPausedAt).not.toBeNull();
+
+      const resumeResponse = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: false });
+      expect(resumeResponse.status).toBe(204);
+
+      const resumed = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(resumed.remindersPausedAt).toBeNull();
+    });
+
+    it('is a no-op when already in the requested state', async () => {
+      const founder = await signupFounder();
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'alreadyactive@example.com',
+        [],
+      );
+      const target = await activeMember(
+        founder.accessToken,
+        'alreadyactive@example.com',
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: false });
+      expect(response.status).toBe(204);
+    });
+
+    it("rejects pausing someone else's reminders, even as tenant:admin", async () => {
+      const founder = await signupFounder();
+      await inviteAndAccept(founder.accessToken, 'notmine@example.com', []);
+      const target = await activeMember(
+        founder.accessToken,
+        'notmine@example.com',
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ paused: true });
+      expect(response.status).toBe(403);
+
+      // Confirms this wasn't silently a no-op that happened to return 403
+      // for an unrelated reason — the target's state genuinely didn't move.
+      const unchanged = await activeMember(
+        founder.accessToken,
+        'notmine@example.com',
+      );
+      expect(unchanged.remindersPausedAt).toBeNull();
+    });
+
+    it('returns 404 for a membership that does not exist', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .patch('/members/00000000-0000-4000-8000-000000000000/reminders')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ paused: true });
+      expect(response.status).toBe(404);
+    });
+  });
+
   describe('DELETE /members/:membershipId', () => {
     it('soft-removes a member so they no longer appear in the list', async () => {
       const founder = await signupFounder();

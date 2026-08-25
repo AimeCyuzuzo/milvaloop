@@ -23,7 +23,12 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
     cell: ({ row }) => {
       const member = row.original;
       if (member.status === 'active') {
-        return <Badge variant="successSoft">Active</Badge>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            <Badge variant="successSoft">Active</Badge>
+            {member.remindersPausedAt ? <Badge variant="outline">Reminders paused</Badge> : null}
+          </div>
+        );
       }
       const expired = new Date(member.expiresAt) < new Date();
       return expired ? (

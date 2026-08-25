@@ -1,5 +1,5 @@
-import { Coins, History, Home, Users, type LucideIcon } from 'lucide-react';
-import type { Permission } from '@milvaloop/types';
+import { Coins, History, Home, Settings, Users, type LucideIcon } from 'lucide-react';
+import { PERMISSIONS, type Permission } from '@milvaloop/types';
 
 export interface NavItem {
   label: string;
@@ -9,8 +9,8 @@ export interface NavItem {
   permission?: Permission;
 }
 
-// Only real destinations — no placeholder Loans/Governance/Settings links
-// for product areas that don't exist yet (see DESIGN.md's "no dead ends").
+// Only real destinations — no placeholder Loans/Governance links for
+// product areas that don't exist yet (see DESIGN.md's "no dead ends").
 // Add to this list as real pages ship; the sidebar renders it, it doesn't
 // hardcode links itself.
 export const NAV_ITEMS: NavItem[] = [
@@ -24,4 +24,8 @@ export const NAV_ITEMS: NavItem[] = [
   // thesis): the audit trail is a read surface every member can see,
   // never gated by what they can do.
   { label: 'Activity', href: '/activity', icon: History },
+  // Unlike Contributions/Activity, Settings has nothing transparent about
+  // it for someone who can't manage it — hidden entirely rather than
+  // linking to a page that would just say "ask an admin."
+  { label: 'Settings', href: '/settings', icon: Settings, permission: PERMISSIONS.CONTRIBUTIONS_SETTINGS },
 ];

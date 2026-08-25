@@ -1,5 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AcceptInviteInput, AuthSession, InviteMemberInput, PendingInvite, UpdateMemberPermissionsInput } from '@milvaloop/types';
+import type {
+  AcceptInviteInput,
+  AuthSession,
+  InviteMemberInput,
+  PendingInvite,
+  UpdateMemberPermissionsInput,
+  UpdateReminderPauseInput,
+} from '@milvaloop/types';
 
 import { apiFetch } from '../api/api-fetch';
 import { applyIssuedSession, useLoginResultMutation } from '../auth/use-auth-mutations';
@@ -29,6 +36,16 @@ export function useUpdateMemberPermissionsMutation() {
   return useMutation({
     mutationFn: ({ membershipId, ...input }: UpdateMemberPermissionsInput & { membershipId: string }) =>
       apiFetch<void>(`/members/${membershipId}/permissions`, { method: 'PATCH', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
+  });
+}
+
+export function useUpdateReminderPauseMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ membershipId, ...input }: UpdateReminderPauseInput & { membershipId: string }) =>
+      apiFetch<void>(`/members/${membershipId}/reminders`, { method: 'PATCH', body: JSON.stringify(input) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
   });
 }

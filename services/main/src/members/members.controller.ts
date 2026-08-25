@@ -21,6 +21,7 @@ import {
   membershipIdParamSchema,
   membershipInviteIdParamSchema,
   updateMemberPermissionsSchema,
+  updateReminderPauseSchema,
   PERMISSIONS,
   type AcceptInviteInput,
   type InviteMemberInput,
@@ -29,6 +30,7 @@ import {
   type MembershipIdParam,
   type MembershipInviteIdParam,
   type UpdateMemberPermissionsInput,
+  type UpdateReminderPauseInput,
 } from '@milvaloop/types';
 import type { Request, Response } from 'express';
 
@@ -100,6 +102,28 @@ export class MembersController {
       claims.sub,
       params.membershipId,
       body.permissions,
+    );
+  }
+
+  // A personal preference, not an admin-gated action — any active member
+  // may call this for their own membershipId; the service rejects it for
+  // any other (see MembersService.updateReminderPause), so there's
+  // nothing for PermissionsGuard to check here.
+  @Patch(':membershipId/reminders')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  async updateReminderPause(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(membershipIdParamSchema))
+    params: MembershipIdParam,
+    @Body(new ZodValidationPipe(updateReminderPauseSchema))
+    body: UpdateReminderPauseInput,
+  ) {
+    await this.membersService.updateReminderPause(
+      claims.tenantId,
+      claims.sub,
+      params.membershipId,
+      body.paused,
     );
   }
 

@@ -11,7 +11,7 @@ import { Typography } from '@milvaloop/ui/typography';
 
 import { formatAmount, formatPeriodLabel } from '@/lib/contributions/format-period';
 import { useMemberSummaryQuery } from '@/lib/contributions/use-member-summary-query';
-import { useMyMembershipId } from '@/lib/contributions/use-my-membership-id';
+import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
 const STATUS_LABEL: Record<PeriodStatusValue, string> = {

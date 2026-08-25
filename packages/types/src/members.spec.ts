@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptInviteSchema, inviteLookupResultSchema } from './members.js';
+import { acceptInviteSchema, inviteLookupResultSchema, updateReminderPauseSchema } from './members.js';
 
 describe('acceptInviteSchema', () => {
   it('accepts a token and password', () => {
@@ -62,5 +62,20 @@ describe('inviteLookupResultSchema', () => {
 
   it('rejects an unrecognized status', () => {
     expect(inviteLookupResultSchema.safeParse({ status: 'revoked' }).success).toBe(false);
+  });
+});
+
+describe('updateReminderPauseSchema', () => {
+  it('accepts pausing and resuming', () => {
+    expect(updateReminderPauseSchema.safeParse({ paused: true }).success).toBe(true);
+    expect(updateReminderPauseSchema.safeParse({ paused: false }).success).toBe(true);
+  });
+
+  it('rejects a non-boolean value', () => {
+    expect(updateReminderPauseSchema.safeParse({ paused: 'true' }).success).toBe(false);
+  });
+
+  it('rejects a missing paused field', () => {
+    expect(updateReminderPauseSchema.safeParse({}).success).toBe(false);
   });
 });
