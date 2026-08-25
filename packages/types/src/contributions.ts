@@ -149,3 +149,18 @@ export const setSharePriceSchema = z.object({
   effectiveFrom: periodSchema,
 });
 export type SetSharePriceInput = z.infer<typeof setSharePriceSchema>;
+
+// GET /contributions/compliance-summary — a tenant-wide snapshot of the
+// current period only, for the dashboard's "how is this month going"
+// card. One count per status a *current* period can actually have —
+// 'prepaid' never applies here, since that only describes a period later
+// than the current one (see ContributionsService's computeStatus).
+export const complianceSummarySchema = z.object({
+  period: periodSchema,
+  totalMembers: z.number().int().nonnegative(),
+  satisfied: z.number().int().nonnegative(),
+  partial: z.number().int().nonnegative(),
+  due: z.number().int().nonnegative(),
+  overdue: z.number().int().nonnegative(),
+});
+export type ComplianceSummary = z.infer<typeof complianceSummarySchema>;

@@ -14,6 +14,7 @@ const PAGE_HEADERS: Record<string, PageHeader> = {
   '/dashboard': { title: 'Overview', description: 'A quick look at your cooperative.' },
   '/members': { title: 'Members', description: 'Who has access to this cooperative, and what they can do.' },
   '/contributions': { title: 'Contributions', description: 'Shares, monthly contributions, and approvals.' },
+  '/activity': { title: 'Activity', description: 'Everything that has happened in this cooperative.' },
   '/account': { title: 'Account', description: 'Manage your account settings.' },
   '/cooperatives/new': { title: 'Create a cooperative', description: 'Set up a new cooperative under your existing account.' },
 };

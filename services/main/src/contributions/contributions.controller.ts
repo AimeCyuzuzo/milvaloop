@@ -58,6 +58,14 @@ export class ContributionsController {
     return this.contributionsService.getSettings(claims.tenantId);
   }
 
+  @Get('compliance-summary')
+  @UseGuards(AccessTokenGuard)
+  async getComplianceSummary(@CurrentUser() claims: AccessTokenClaims) {
+    return this.contributionsService.getTenantComplianceSummary(
+      claims.tenantId,
+    );
+  }
+
   @Get('members/:membershipId/summary')
   @UseGuards(AccessTokenGuard)
   async getMemberSummary(

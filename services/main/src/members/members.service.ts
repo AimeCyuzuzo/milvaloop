@@ -256,8 +256,9 @@ export class MembersService {
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [membership] = await tx
-        .select()
+        .select({ permissions: memberships.permissions, email: users.email })
         .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
         .where(
           and(
             eq(memberships.id, membershipId),
@@ -288,7 +289,11 @@ export class MembersService {
         action: 'member.permissions_updated',
         entityType: 'membership',
         entityId: membershipId,
-        metadata: { before: membership.permissions, after: nextPermissions },
+        metadata: {
+          email: membership.email,
+          before: membership.permissions,
+          after: nextPermissions,
+        },
       });
     });
   }
@@ -305,8 +310,9 @@ export class MembersService {
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [membership] = await tx
-        .select()
+        .select({ permissions: memberships.permissions, email: users.email })
         .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
         .where(
           and(
             eq(memberships.id, membershipId),
@@ -351,7 +357,10 @@ export class MembersService {
         action: 'member.removed',
         entityType: 'membership',
         entityId: membershipId,
-        metadata: { permissions: membership.permissions },
+        metadata: {
+          email: membership.email,
+          permissions: membership.permissions,
+        },
       });
     });
   }

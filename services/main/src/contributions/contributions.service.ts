@@ -16,6 +16,7 @@ import {
 } from '@milvaloop/email';
 import {
   PERMISSIONS,
+  type ComplianceSummary,
   type ContributionListItem,
   type ContributionListQuery,
   type ContributionListResponse,
@@ -276,8 +277,9 @@ export class ContributionsService {
       );
 
       const [member] = await tx
-        .select({ id: memberships.id })
+        .select({ id: memberships.id, email: users.email })
         .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
         .where(
           and(
             eq(memberships.id, input.membershipId),
@@ -333,6 +335,7 @@ export class ContributionsService {
         entityId: contribution.id,
         metadata: {
           membershipId: input.membershipId,
+          email: member.email,
           amount: input.amount,
           allocations: input.allocations,
         },
@@ -382,7 +385,11 @@ export class ContributionsService {
         action: 'contribution.approved',
         entityType: 'contribution',
         entityId: contributionId,
-        metadata: {},
+        metadata: {
+          membershipId: contribution.membershipId,
+          email: await this.loadMembershipEmail(tx, contribution.membershipId),
+          amount: contribution.amount,
+        },
       });
 
       return contribution;
@@ -431,7 +438,12 @@ export class ContributionsService {
         action: 'contribution.rejected',
         entityType: 'contribution',
         entityId: contributionId,
-        metadata: { reason },
+        metadata: {
+          membershipId: contribution.membershipId,
+          email: await this.loadMembershipEmail(tx, contribution.membershipId),
+          amount: contribution.amount,
+          reason,
+        },
       });
     });
   }
@@ -486,6 +498,57 @@ export class ContributionsService {
       costBasis,
       currentValue: latestPrice ? totalShares * latestPrice.amount : 0,
       periods: periodStatuses,
+    };
+  }
+
+  // GET /contributions/compliance-summary — the dashboard's "how is this
+  // month going" card: a tenant-wide count of the current period's status
+  // across every active member, not any one member's own history.
+  async getTenantComplianceSummary(
+    tenantId: string,
+  ): Promise<ComplianceSummary> {
+    const sharePriceRows = await this.loadSharePrices(this.db, tenantId);
+    if (sharePriceRows.length === 0) {
+      throw new BadRequestException(
+        'Contributions have not been set up for this cooperative yet',
+      );
+    }
+
+    const current = this.currentPeriod();
+    const activeMemberships = await this.db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
+      );
+
+    const counts: Record<PeriodStatusValue, number> = {
+      satisfied: 0,
+      partial: 0,
+      due: 0,
+      overdue: 0,
+      prepaid: 0,
+    };
+    for (const { id: membershipId } of activeMemberships) {
+      const periods = await this.loadPeriodsThrough(
+        tenantId,
+        membershipId,
+        current,
+        sharePriceRows,
+      );
+      const currentPeriodStatus = periods[periods.length - 1];
+      if (currentPeriodStatus) {
+        counts[currentPeriodStatus.status] += 1;
+      }
+    }
+
+    return {
+      period: current,
+      totalMembers: activeMemberships.length,
+      satisfied: counts.satisfied,
+      partial: counts.partial,
+      due: counts.due,
+      overdue: counts.overdue,
     };
   }
 
@@ -590,6 +653,24 @@ export class ContributionsService {
       );
     }
     return membership.id;
+  }
+
+  // Membership emails don't move once a membership exists (see users.email
+  // and memberships.userId — a membership is never reassigned to a
+  // different user), so this doesn't need `removedAt IS NULL` the way an
+  // authorization check would: an audit event about a since-removed
+  // member should still name them, not go blank.
+  private async loadMembershipEmail(
+    executor: Database | Transaction,
+    membershipId: string,
+  ): Promise<string | undefined> {
+    const [row] = await executor
+      .select({ email: users.email })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(eq(memberships.id, membershipId))
+      .limit(1);
+    return row?.email;
   }
 
   // A period's price is pinned by the first allocation ever created for

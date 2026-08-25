@@ -508,6 +508,110 @@ describe('Contributions (e2e)', () => {
     });
   });
 
+  describe('GET /contributions/compliance-summary', () => {
+    it('rejects before the cooperative has a share price set', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .get('/contributions/compliance-summary')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(400);
+    });
+
+    it('counts an untouched current period as due', async () => {
+      const founder = await signupFounder();
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/compliance-summary')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        period: currentPeriod(),
+        totalMembers: 1,
+        satisfied: 0,
+        partial: 0,
+        due: 1,
+        overdue: 0,
+      });
+    });
+
+    it('reflects an approved payment as satisfied and excludes a member removed since', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await inviteAndAccept(founder.accessToken, 'compliance@example.com', []);
+      const plainMemberId = await membershipIdByEmail(
+        founder.accessToken,
+        'compliance@example.com',
+      );
+
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      await request(app.getHttpServer())
+        .delete(`/members/${plainMemberId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/compliance-summary')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        period: currentPeriod(),
+        totalMembers: 1,
+        satisfied: 1,
+        partial: 0,
+        due: 0,
+        overdue: 0,
+      });
+    });
+
+    it("never mixes another tenant's members into the count", async () => {
+      const founderA = await signupFounder();
+      await setSharePrice(founderA.accessToken, SHARE_PRICE, currentPeriod());
+      const founderB = await signupFounder({
+        email: 'compliance-b@example.com',
+        tenantName: 'Compliance Test Coop B',
+      });
+      await setSharePrice(founderB.accessToken, SHARE_PRICE, currentPeriod());
+      const founderBMembershipId = await activeMembershipId(
+        founderB.accessToken,
+      );
+      await recordContribution(
+        founderB.accessToken,
+        founderBMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founderB.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founderB.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/compliance-summary')
+        .set('Authorization', `Bearer ${founderA.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        period: currentPeriod(),
+        totalMembers: 1,
+        satisfied: 0,
+        partial: 0,
+        due: 1,
+        overdue: 0,
+      });
+    });
+  });
+
   describe('permissions and tenant isolation', () => {
     it('rejects recording for someone else without contributions:record', async () => {
       const founder = await signupFounder();
