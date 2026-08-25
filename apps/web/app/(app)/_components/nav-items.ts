@@ -1,4 +1,4 @@
-import { Coins, History, Home, Settings, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, Coins, History, Home, Settings, Users, type LucideIcon } from 'lucide-react';
 import { PERMISSIONS, type Permission } from '@milvaloop/types';
 
 export interface NavItem {
@@ -20,6 +20,10 @@ export const NAV_ITEMS: NavItem[] = [
   // status (transparency is the design, see the feature plan); recording
   // and approving are gated inside the page itself, not at the nav level.
   { label: 'Contributions', href: '/contributions', icon: Coins },
+  // Same transparency as Contributions above — it's the same data,
+  // aggregated (see ContributionsService.getAnalytics) — plus it handles
+  // its own "not set up yet" state, so a direct link is never a dead end.
+  { label: 'Analytics', href: '/contributions/analytics', icon: BarChart3 },
   // No `permission` — full transparency (see MAIN.md's explainability
   // thesis): the audit trail is a read surface every member can see,
   // never gated by what they can do.
