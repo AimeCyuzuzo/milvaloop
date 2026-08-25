@@ -14,6 +14,7 @@ import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-qu
 
 import { AnalyticsTotalsCards } from './_components/analytics-totals-cards';
 import { memberAnalyticsColumns } from './_components/member-analytics-columns';
+import { PeriodComplianceChart } from './_components/period-compliance-chart';
 import { PeriodHistoryTable } from './_components/period-history-table';
 
 // The tenant-wide "everything in one place" report — every number the
@@ -77,7 +78,8 @@ export default function ContributionsAnalyticsPage() {
           <CardTitle>Compliance by month</CardTitle>
           <CardDescription>Every period since the cooperative started tracking contributions.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-6">
+          <PeriodComplianceChart periods={analytics.periods} />
           <PeriodHistoryTable periods={analytics.periods} />
         </CardContent>
       </Card>
