@@ -6,31 +6,6 @@ when it came up as a real, scoped decision during actual work and was
 consciously pushed to later. Remove an item once it's done or once it's
 decided it won't be done.
 
-## Invites (cooperative membership invitations)
-
-An existing member of a cooperative inviting someone else to join it. Out of
-scope for the initial multi-cooperative auth rework, which only covers a user
-choosing among cooperatives they already belong to, or creating a brand-new
-one — not being added to someone else's.
-
-Expected shape when this is picked up:
-- A `membership_invites`-style table: `tenantId`, `email`, `permissions`
-  (the permissions the invite grants on acceptance), `invitedByUserId`, a
-  hashed single-use token, `expiresAt`, `consumedAt` — mirrors the existing
-  `magic_link_tokens`/`password_reset_tokens` pattern.
-- An authenticated, permission-gated endpoint for an existing member to
-  create an invite (sends an email with an accept link).
-- An accept-invite endpoint: if the invited email already has an account,
-  create the membership and finish however login normally finishes (see
-  `AuthService.finishLogin` — the same 1-cooperative/many-cooperatives
-  branching applies once the new membership exists); if it doesn't, the
-  accept flow needs to also collect a password and create the user.
-- The natural place to surface pending invites in the frontend is the
-  `selection_required`/`no_cooperatives` states on the login and
-  magic-link-consume pages — someone with a pending invite sees it
-  alongside their existing cooperatives / the create-first-cooperative
-  form, not on a separate screen.
-
 ## Redis-backed rate-limiter storage
 
 `@nestjs/throttler`'s default in-memory storage is used today. That's a
