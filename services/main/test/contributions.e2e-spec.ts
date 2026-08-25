@@ -13,6 +13,7 @@ import type {
   ShareSettingsResponse,
 } from '@milvaloop/types';
 import cookieParser from 'cookie-parser';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 
@@ -26,12 +27,35 @@ import { ContributionsController } from '../src/contributions/contributions.cont
 import { ContributionsService } from '../src/contributions/contributions.service';
 import { DATABASE_CONNECTION } from '../src/db/db.module';
 import { MAILER } from '../src/email/mailer.module';
+import { ExportService } from '../src/export/export.service';
 import { MembersController } from '../src/members/members.controller';
 import { MembersService } from '../src/members/members.service';
 import { createFakeMailer } from './fakes/fake-mailer';
 
 function bodyAs<T>(response: request.Response): T {
   return response.body as T;
+}
+
+// supertest/superagent only parses a response body for content types it
+// recognizes (json, text, ...); an .xlsx response needs this instead, to
+// buffer the raw bytes so the test can load them back as a real workbook
+// rather than trusting the Content-Type header alone.
+function binaryParser(
+  res: request.Response,
+  callback: (err: Error | null, body?: Buffer) => void,
+): void {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+}
+
+// exceljs's .load() is typed against its own ambient `Buffer`, distinct
+// from @types/node's real one this file otherwise uses — see
+// export.service.spec.ts's identical helper for the full explanation.
+async function loadWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as never);
+  return workbook;
 }
 
 // A period is the first day of the current calendar month — the same
@@ -186,6 +210,7 @@ describe('Contributions (e2e)', () => {
         AuditLogService,
         MembersService,
         ContributionsService,
+        ExportService,
         { provide: DATABASE_CONNECTION, useValue: testDb.db },
         { provide: MAILER, useValue: mailer },
       ],
@@ -609,6 +634,183 @@ describe('Contributions (e2e)', () => {
         due: 1,
         overdue: 0,
       });
+    });
+  });
+
+  describe('GET /contributions/analytics', () => {
+    it('rejects before the cooperative has a share price set', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .get('/contributions/analytics')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(400);
+    });
+
+    it('reports cooperative totals, period history, and every member side by side', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await inviteAndAccept(founder.accessToken, 'analytics@example.com', []);
+      const plainMemberId = await membershipIdByEmail(
+        founder.accessToken,
+        'analytics@example.com',
+      );
+
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      // A pending contribution from the second member — never approved, so
+      // it shows up in totalPendingAmount but doesn't move their shares.
+      await recordContribution(founder.accessToken, plainMemberId, 20_000);
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/analytics')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        asOfPeriod: currentPeriod(),
+        totals: {
+          activeMembers: 2,
+          totalSharesOutstanding: 1,
+          totalCostBasis: SHARE_PRICE,
+          totalCurrentValue: SHARE_PRICE,
+          totalPendingAmount: 20_000,
+          totalRejectedAmount: 0,
+        },
+        periods: [
+          {
+            period: currentPeriod(),
+            totalMembers: 2,
+            satisfied: 1,
+            partial: 0,
+            due: 1,
+            overdue: 0,
+          },
+        ],
+      });
+      const members = bodyAs<{
+        members: Array<{
+          email: string;
+          totalShares: number;
+          currentPeriodStatus: string;
+        }>;
+      }>(response).members;
+      expect(members).toHaveLength(2);
+      expect(members).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            email: founder.user.email,
+            totalShares: 1,
+            currentPeriodStatus: 'satisfied',
+          }),
+          expect.objectContaining({
+            email: 'analytics@example.com',
+            totalShares: 0,
+            currentPeriodStatus: 'due',
+          }),
+        ]),
+      );
+    });
+
+    it("never mixes another tenant's members into the report", async () => {
+      const founderA = await signupFounder();
+      await setSharePrice(founderA.accessToken, SHARE_PRICE, currentPeriod());
+      const founderB = await signupFounder({
+        email: 'analytics-b@example.com',
+        tenantName: 'Analytics Test Coop B',
+      });
+      await setSharePrice(founderB.accessToken, SHARE_PRICE, currentPeriod());
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/analytics')
+        .set('Authorization', `Bearer ${founderA.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(
+        bodyAs<{ totals: { activeMembers: number } }>(response).totals
+          .activeMembers,
+      ).toBe(1);
+    });
+  });
+
+  describe('GET /contributions/export', () => {
+    it('returns a real workbook containing the ledger, named for the cooperative and filter', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/export')
+        .query({ status: 'pending' })
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .buffer(true)
+        .parse(binaryParser);
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('spreadsheetml.sheet');
+      const disposition = response.headers['content-disposition'];
+      expect(disposition).toContain(
+        `${founder.tenant.slug}-contributions-pending`,
+      );
+      expect(disposition).toContain('.xlsx');
+
+      const workbook = await loadWorkbook(response.body as Buffer);
+      const sheet = workbook.getWorksheet('Contributions');
+      expect(sheet?.getRow(1).getCell(1).value).toBe('Member');
+      expect(sheet?.getRow(2).getCell(1).value).toBe(founder.user.email);
+      expect(sheet?.getRow(2).getCell(2).value).toBe(SHARE_PRICE);
+      expect(sheet?.getRow(2).getCell(4).value).toBe('pending');
+    });
+  });
+
+  describe('GET /contributions/analytics/export', () => {
+    it('returns a workbook with an overview, period history, and per-member sheet', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .get('/contributions/analytics/export')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .buffer(true)
+        .parse(binaryParser);
+
+      expect(response.status).toBe(200);
+      const disposition = response.headers['content-disposition'];
+      expect(disposition).toContain(
+        `${founder.tenant.slug}-contributions-analytics`,
+      );
+
+      const workbook = await loadWorkbook(response.body as Buffer);
+      expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+        'Overview',
+        'By period',
+        'By member',
+      ]);
+      const membersSheet = workbook.getWorksheet('By member');
+      expect(membersSheet?.getRow(2).getCell(1).value).toBe(founder.user.email);
+      expect(membersSheet?.getRow(2).getCell(2).value).toBe(1);
     });
   });
 

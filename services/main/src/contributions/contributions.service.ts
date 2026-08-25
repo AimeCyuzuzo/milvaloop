@@ -16,6 +16,9 @@ import {
 } from '@milvaloop/email';
 import {
   PERMISSIONS,
+  type AnalyticsMemberRow,
+  type AnalyticsPeriodRow,
+  type AnalyticsResponse,
   type ComplianceSummary,
   type ContributionListItem,
   type ContributionListQuery,
@@ -37,6 +40,11 @@ import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import type { Transaction } from '../db/types';
 import { MAILER } from '../email/mailer.module';
+import {
+  buildExportFilename,
+  ExportService,
+  type ExportSheet,
+} from '../export/export.service';
 import { formatPeriodLabel, truncateToMonth } from './contributions-dates';
 import {
   computeWaterfallAllocations,
@@ -117,6 +125,7 @@ export class ContributionsService {
     @Inject(DATABASE_CONNECTION) private readonly db: Database,
     @Inject(MAILER) private readonly mailer: Mailer,
     private readonly auditLog: AuditLogService,
+    private readonly exportService: ExportService,
   ) {}
 
   async getSettings(tenantId: string): Promise<ShareSettingsResponse> {
@@ -459,6 +468,19 @@ export class ContributionsService {
       );
     }
 
+    return this.computeMemberSnapshot(tenantId, membershipId, sharePriceRows);
+  }
+
+  // The one place that computes a member's shares/cost-basis/period
+  // history — used both for that member's own "explain this" page
+  // (getMemberSummary) and, looped over every active membership, for the
+  // tenant-wide analytics report below. `sharePriceRows` is loaded once by
+  // the caller and passed in rather than reloaded per member.
+  private async computeMemberSnapshot(
+    tenantId: string,
+    membershipId: string,
+    sharePriceRows: SharePriceRow[],
+  ): Promise<MemberContributionSummary> {
     const current = this.currentPeriod();
     let lookaheadPeriod = current;
     for (let i = 0; i < SUMMARY_LOOKAHEAD_MONTHS; i += 1) {
@@ -479,12 +501,7 @@ export class ContributionsService {
     );
     const costBasis = await this.sumApprovedContributions(membershipId);
     const latestPrice = sharePriceRows[sharePriceRows.length - 1];
-
-    const totalShares = periods.reduce(
-      (total, period) =>
-        total + Math.floor(period.paidAmount / period.dueAmount),
-      0,
-    );
+    const totalShares = this.sumSharesOwned(periods);
     const periodStatuses: PeriodStatus[] = periods.map((period) => ({
       period: period.period,
       dueAmount: period.dueAmount,
@@ -499,6 +516,234 @@ export class ContributionsService {
       currentValue: latestPrice ? totalShares * latestPrice.amount : 0,
       periods: periodStatuses,
     };
+  }
+
+  // A share is owned once a period is paid in full, at that period's own
+  // pinned price — never re-valued at today's price (see
+  // contribution-allocations.ts). Shared by every place that reports a
+  // member's share count so this math exists exactly once.
+  private sumSharesOwned(periods: ComputedPeriod[]): number {
+    return periods.reduce(
+      (total, period) =>
+        total + Math.floor(period.paidAmount / period.dueAmount),
+      0,
+    );
+  }
+
+  // GET /contributions/analytics — the tenant-wide "everything in one
+  // place" report: cooperative totals, the full period-by-period
+  // compliance history (every period since the first share price, not
+  // just the current month — unlike compliance-summary above, which stays
+  // narrow on purpose for the dashboard's lightweight card), and every
+  // active member's own numbers side by side. Nothing here is gated beyond
+  // a valid session — it aggregates numbers that are already individually
+  // visible to any member (see getMemberSummary), just without making
+  // anyone add them up by hand.
+  async getAnalytics(tenantId: string): Promise<AnalyticsResponse> {
+    const sharePriceRows = await this.loadSharePrices(this.db, tenantId);
+    if (sharePriceRows.length === 0) {
+      throw new BadRequestException(
+        'Contributions have not been set up for this cooperative yet',
+      );
+    }
+
+    const current = this.currentPeriod();
+    const activeMemberships = await this.db
+      .select({ id: memberships.id, email: users.email })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(
+        and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
+      );
+
+    const snapshots = await Promise.all(
+      activeMemberships.map((membership) =>
+        this.computeMemberSnapshot(tenantId, membership.id, sharePriceRows),
+      ),
+    );
+
+    const periodCounts = new Map<
+      string,
+      {
+        totalMembers: number;
+        satisfied: number;
+        partial: number;
+        due: number;
+        overdue: number;
+      }
+    >();
+    for (const snapshot of snapshots) {
+      for (const period of snapshot.periods) {
+        // Only periods through the current one — a period beyond it is a
+        // member's own prepaid lookahead (see computeMemberSnapshot), not
+        // a fact about the cooperative's compliance history yet.
+        if (period.period > current || period.status === 'prepaid') {
+          continue;
+        }
+        const bucket = periodCounts.get(period.period) ?? {
+          totalMembers: 0,
+          satisfied: 0,
+          partial: 0,
+          due: 0,
+          overdue: 0,
+        };
+        bucket.totalMembers += 1;
+        bucket[period.status] += 1;
+        periodCounts.set(period.period, bucket);
+      }
+    }
+    const periods: AnalyticsPeriodRow[] = Array.from(periodCounts.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, counts]) => ({ period, ...counts }));
+
+    const { pending: totalPendingAmount, rejected: totalRejectedAmount } =
+      await this.sumContributionsByStatus(tenantId);
+
+    const membersByEmail = new Map(
+      activeMemberships.map((membership) => [membership.id, membership.email]),
+    );
+    const members: AnalyticsMemberRow[] = snapshots.map((snapshot) => ({
+      membershipId: snapshot.membershipId,
+      email: membersByEmail.get(snapshot.membershipId) ?? '',
+      totalShares: snapshot.totalShares,
+      costBasis: snapshot.costBasis,
+      currentValue: snapshot.currentValue,
+      currentPeriodStatus:
+        snapshot.periods.find((period) => period.period === current)?.status ??
+        null,
+    }));
+
+    return {
+      asOfPeriod: current,
+      totals: {
+        activeMembers: activeMemberships.length,
+        totalSharesOutstanding: members.reduce(
+          (total, member) => total + member.totalShares,
+          0,
+        ),
+        totalCostBasis: members.reduce(
+          (total, member) => total + member.costBasis,
+          0,
+        ),
+        totalCurrentValue: members.reduce(
+          (total, member) => total + member.currentValue,
+          0,
+        ),
+        totalPendingAmount,
+        totalRejectedAmount,
+      },
+      periods,
+      members,
+    };
+  }
+
+  // GET /contributions/analytics/export — the same report as getAnalytics,
+  // as a workbook someone can hand to a treasurer who isn't in the app:
+  // one sheet per shape of data (totals, period history, per-member),
+  // rather than flattening everything into a single confusing sheet.
+  async exportAnalytics(
+    tenantId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const analytics = await this.getAnalytics(tenantId);
+
+    const overviewSheet: ExportSheet = {
+      name: 'Overview',
+      columns: [
+        { header: 'Metric', key: 'metric', width: 32 },
+        { header: 'Value', key: 'value' },
+      ],
+      rows: [
+        { metric: 'As of period', value: analytics.asOfPeriod },
+        { metric: 'Active members', value: analytics.totals.activeMembers },
+        {
+          metric: 'Total shares outstanding',
+          value: analytics.totals.totalSharesOutstanding,
+        },
+        {
+          metric: 'Total contributed (cost basis, RWF)',
+          value: analytics.totals.totalCostBasis,
+        },
+        {
+          metric: "Total value at today's price (RWF)",
+          value: analytics.totals.totalCurrentValue,
+        },
+        {
+          metric: 'Pending approval (RWF)',
+          value: analytics.totals.totalPendingAmount,
+        },
+        {
+          metric: 'Rejected, all-time (RWF)',
+          value: analytics.totals.totalRejectedAmount,
+        },
+      ],
+    };
+    const periodsSheet: ExportSheet = {
+      name: 'By period',
+      columns: [
+        { header: 'Period', key: 'period' },
+        { header: 'Members', key: 'totalMembers' },
+        { header: 'Satisfied', key: 'satisfied' },
+        { header: 'Partial', key: 'partial' },
+        { header: 'Due', key: 'due' },
+        { header: 'Overdue', key: 'overdue' },
+      ],
+      rows: analytics.periods.map((period) => ({ ...period })),
+    };
+    const membersSheet: ExportSheet = {
+      name: 'By member',
+      columns: [
+        { header: 'Member', key: 'email', width: 28 },
+        { header: 'Shares owned', key: 'totalShares' },
+        { header: 'Total contributed (RWF)', key: 'costBasis' },
+        { header: "Value at today's price (RWF)", key: 'currentValue' },
+        { header: 'Current period status', key: 'currentPeriodStatus' },
+      ],
+      rows: analytics.members.map((member) => ({
+        email: member.email,
+        totalShares: member.totalShares,
+        costBasis: member.costBasis,
+        currentValue: member.currentValue,
+        currentPeriodStatus: member.currentPeriodStatus,
+      })),
+    };
+
+    const buffer = await this.exportService.buildWorkbook([
+      overviewSheet,
+      periodsSheet,
+      membersSheet,
+    ]);
+    const tenantSlug = await this.loadTenantSlug(tenantId);
+    const filename = buildExportFilename([
+      tenantSlug,
+      'contributions',
+      'analytics',
+      analytics.asOfPeriod,
+    ]);
+    return { buffer, filename };
+  }
+
+  private async loadTenantSlug(tenantId: string): Promise<string> {
+    const [tenant] = await this.db
+      .select({ slug: tenants.slug })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    return tenant?.slug ?? tenantId;
+  }
+
+  private async sumContributionsByStatus(
+    tenantId: string,
+  ): Promise<Record<'pending' | 'approved' | 'rejected', number>> {
+    const rows = await this.db
+      .select({ status: contributions.status, amount: contributions.amount })
+      .from(contributions)
+      .where(eq(contributions.tenantId, tenantId));
+
+    const totals = { pending: 0, approved: 0, rejected: 0 };
+    for (const row of rows) {
+      totals[row.status] += row.amount;
+    }
+    return totals;
   }
 
   // GET /contributions/compliance-summary — the dashboard's "how is this
@@ -608,6 +853,53 @@ export class ContributionsService {
     }));
 
     return { contributions: items };
+  }
+
+  // GET /contributions/export — the ledger as a spreadsheet, respecting
+  // whatever filter the caller applied (see listContributions) rather than
+  // always exporting everything, so "export what I'm looking at" actually
+  // means that.
+  async exportLedger(
+    tenantId: string,
+    filters: ContributionListQuery,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const { contributions: items } = await this.listContributions(
+      tenantId,
+      filters,
+    );
+    const sheet: ExportSheet = {
+      name: 'Contributions',
+      columns: [
+        { header: 'Member', key: 'member', width: 28 },
+        { header: 'Amount (RWF)', key: 'amount' },
+        { header: 'Contributed on', key: 'contributedAt' },
+        { header: 'Status', key: 'status' },
+        { header: 'Recorded by', key: 'recordedBy', width: 28 },
+        { header: 'Approved by', key: 'approvedBy', width: 28 },
+        { header: 'Rejection reason', key: 'rejectionReason', width: 32 },
+        { header: 'Note', key: 'note', width: 32 },
+      ],
+      rows: items.map((item) => ({
+        member: item.member.email,
+        amount: item.amount,
+        contributedAt: item.contributedAt,
+        status: item.status,
+        recordedBy: item.recordedBy.email,
+        approvedBy: item.approvedBy?.email ?? null,
+        rejectionReason: item.rejectionReason,
+        note: item.note,
+      })),
+    };
+
+    const buffer = await this.exportService.buildWorkbook([sheet]);
+    const tenantSlug = await this.loadTenantSlug(tenantId);
+    const filename = buildExportFilename([
+      tenantSlug,
+      'contributions',
+      filters.status ?? 'all',
+      this.currentPeriod(),
+    ]);
+    return { buffer, filename };
   }
 
   private currentPeriod(): string {

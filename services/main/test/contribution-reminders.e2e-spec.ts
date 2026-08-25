@@ -23,6 +23,7 @@ import { ContributionsController } from '../src/contributions/contributions.cont
 import { ContributionsService } from '../src/contributions/contributions.service';
 import { DATABASE_CONNECTION } from '../src/db/db.module';
 import { MAILER } from '../src/email/mailer.module';
+import { ExportService } from '../src/export/export.service';
 import { MembersController } from '../src/members/members.controller';
 import { MembersService } from '../src/members/members.service';
 import { createFakeMailer } from './fakes/fake-mailer';
@@ -173,6 +174,7 @@ describe('Contribution reminders (e2e)', () => {
         MembersService,
         ContributionsService,
         ContributionReminderService,
+        ExportService,
         { provide: DATABASE_CONNECTION, useValue: testDb.db },
         { provide: MAILER, useValue: mailer },
       ],

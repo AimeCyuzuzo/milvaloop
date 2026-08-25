@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import type { PeriodStatusValue } from '@milvaloop/types';
 
 import { Badge } from '@milvaloop/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
@@ -10,25 +9,10 @@ import { Skeleton } from '@milvaloop/ui/skeleton';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { formatAmount, formatPeriodLabel } from '@/lib/contributions/format-period';
+import { PERIOD_STATUS_BADGE_VARIANT, PERIOD_STATUS_LABEL } from '@/lib/contributions/period-status-labels';
 import { useMemberSummaryQuery } from '@/lib/contributions/use-member-summary-query';
 import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
-
-const STATUS_LABEL: Record<PeriodStatusValue, string> = {
-  satisfied: 'Satisfied',
-  partial: 'Partial',
-  due: 'Due',
-  overdue: 'Overdue',
-  prepaid: 'Prepaid',
-};
-
-const STATUS_BADGE_VARIANT: Record<PeriodStatusValue, 'successSoft' | 'warningSoft' | 'destructiveSoft'> = {
-  satisfied: 'successSoft',
-  prepaid: 'successSoft',
-  partial: 'warningSoft',
-  due: 'warningSoft',
-  overdue: 'destructiveSoft',
-};
 
 // Shares owned and monthly compliance are shown as two independent facts,
 // never folded into one number — someone can own many shares and still be
@@ -106,7 +90,7 @@ export function MemberSummaryCard() {
                     <Typography variant="small" color="muted">
                       {formatAmount(period.paidAmount)} / {formatAmount(period.dueAmount)}
                     </Typography>
-                    <Badge variant={STATUS_BADGE_VARIANT[period.status]}>{STATUS_LABEL[period.status]}</Badge>
+                    <Badge variant={PERIOD_STATUS_BADGE_VARIANT[period.status]}>{PERIOD_STATUS_LABEL[period.status]}</Badge>
                   </div>
                 </div>
               ))}

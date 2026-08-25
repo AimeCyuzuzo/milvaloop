@@ -80,12 +80,11 @@ function buildRequest(path: string, options: ApiFetchOptions): Request {
   });
 }
 
-/**
- * The only sanctioned way to call `services/main` from the browser. Never
- * call `fetch` directly for API requests — this is the single place that
- * attaches the access token and transparently refreshes it on a 401.
- */
-export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+// Shared by every response-handling shape below (JSON today, a binary
+// download too) — attaching the token and retrying once past a 401 is a
+// cross-cutting concern that belongs in exactly one place, not duplicated
+// per response type.
+async function fetchWithAuthRetry(path: string, options: ApiFetchOptions): Promise<Response> {
   let response = await fetch(buildRequest(path, options));
 
   if (response.status === 401 && !options.skipAuth) {
@@ -94,6 +93,17 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
       response = await fetch(buildRequest(path, options));
     }
   }
+
+  return response;
+}
+
+/**
+ * The only sanctioned way to call `services/main` from the browser. Never
+ * call `fetch` directly for API requests — this is the single place that
+ * attaches the access token and transparently refreshes it on a 401.
+ */
+export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const response = await fetchWithAuthRetry(path, options);
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -110,4 +120,34 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
     return undefined as T;
   }
   return JSON.parse(text) as T;
+}
+
+// The filename a downloadable response was sent under, e.g. a spreadsheet
+// export — read from Content-Disposition rather than guessed on the
+// frontend, since the backend is the one that knows what's actually in it.
+function filenameFromContentDisposition(response: Response): string {
+  const header = response.headers.get('Content-Disposition') ?? '';
+  const match = /filename="?([^";]+)"?/.exec(header);
+  return match?.[1] ?? 'download';
+}
+
+/**
+ * For an endpoint that returns a file (a spreadsheet export, so far) rather
+ * than JSON — same auth/refresh handling as `apiFetch`, but hands back the
+ * raw response body and the filename the backend named it. See
+ * `lib/export/download-export.ts` for the reusable "save this to disk" half
+ * every export feature builds on top of this.
+ */
+export async function apiFetchBlob(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetchWithAuthRetry(path, options);
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(`${options.method ?? 'GET'} ${path} failed with ${response.status}`, response.status, body);
+  }
+
+  return { blob: await response.blob(), filename: filenameFromContentDisposition(response) };
 }

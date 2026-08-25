@@ -6,6 +6,26 @@ when it came up as a real, scoped decision during actual work and was
 consciously pushed to later. Remove an item once it's done or once it's
 decided it won't be done.
 
+## Member removal: reviewing what happens to a removed member's history
+
+Removing a member is already a permission-gated soft delete
+(`MembersService.remove`, `memberships.removedAt`), and their historical
+contributions/allocations/audit entries stay intact and correctly
+tenant-scoped after removal — nothing about their past record is deleted or
+miscalculated. What's genuinely missing is discoverability: a removed member
+disappears from the Members list entirely, the only trace left is one
+plain-text Activity log line, and there's no page to look up a specific
+member's contribution history by id at all (not even your own, today — it's
+only ever embedded on the dashboard for the signed-in member).
+
+Deliberately not picked up yet: what removal should actually mean for a real
+cooperative — their outstanding shares, whether contribution history should
+stay visible to everyone or only admins, whether removal should be
+reversible — is a product question that depends on how different
+cooperatives want to handle a member leaving, not something to decide
+unilaterally. Revisit once there's real input from more than one group on
+what they'd expect here.
+
 ## Redis-backed rate-limiter storage
 
 `@nestjs/throttler`'s default in-memory storage is used today. That's a

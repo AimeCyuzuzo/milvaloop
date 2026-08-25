@@ -7,6 +7,7 @@ import { DataTable } from '@milvaloop/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 
+import { ExportButton } from '@/components/export-button';
 import { useContributionsQuery } from '@/lib/contributions/use-contributions-query';
 
 import { contributionColumns } from './contributions-columns';
@@ -28,19 +29,25 @@ export function ContributionsTable() {
   const { data, isPending } = useContributionsQuery(status === 'all' ? {} : { status });
 
   const filterControl = (
-    <div className="w-36">
-      <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-        <SelectTrigger size="sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="flex items-center gap-2">
+      <div className="w-36">
+        <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ExportButton
+        path={status === 'all' ? '/contributions/export' : `/contributions/export?status=${status}`}
+        label="Export"
+      />
     </div>
   );
 

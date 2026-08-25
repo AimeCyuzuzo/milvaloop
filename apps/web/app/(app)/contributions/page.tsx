@@ -66,9 +66,14 @@ export default function ContributionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Typography variant="small" color="muted">
-          Share price: {formatAmount(settings.current.amount)}
-        </Typography>
+        <div className="flex flex-wrap items-center gap-4">
+          <Typography variant="small" color="muted">
+            Share price: {formatAmount(settings.current.amount)}
+          </Typography>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/contributions/analytics">View analytics</Link>
+          </Button>
+        </div>
         {canRecordForOthers ? (
           <RecordContributionDialog triggerLabel="Record a contribution" />
         ) : myMembershipId ? (

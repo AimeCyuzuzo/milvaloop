@@ -7,6 +7,8 @@ import {
   Param,
   Post,
   Query,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,6 +28,7 @@ import {
   type RejectContributionInput,
   type SetSharePriceInput,
 } from '@milvaloop/types';
+import type { Response } from 'express';
 
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -33,6 +36,20 @@ import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { ContributionsService } from './contributions.service';
+
+const XLSX_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function sendWorkbook(
+  res: Response,
+  { buffer, filename }: { buffer: Buffer; filename: string },
+): StreamableFile {
+  res.set({
+    'Content-Type': XLSX_CONTENT_TYPE,
+    'Content-Disposition': `attachment; filename="${filename}"`,
+  });
+  return new StreamableFile(buffer);
+}
 
 // Transparency by design (see the feature plan): every read here needs
 // nothing beyond a valid session — any active member can see any other
@@ -64,6 +81,39 @@ export class ContributionsController {
     return this.contributionsService.getTenantComplianceSummary(
       claims.tenantId,
     );
+  }
+
+  @Get('analytics')
+  @UseGuards(AccessTokenGuard)
+  async getAnalytics(@CurrentUser() claims: AccessTokenClaims) {
+    return this.contributionsService.getAnalytics(claims.tenantId);
+  }
+
+  @Get('export')
+  @UseGuards(AccessTokenGuard)
+  async exportLedger(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Query(new ZodValidationPipe(contributionListQuerySchema))
+    query: ContributionListQuery,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const workbook = await this.contributionsService.exportLedger(
+      claims.tenantId,
+      query,
+    );
+    return sendWorkbook(res, workbook);
+  }
+
+  @Get('analytics/export')
+  @UseGuards(AccessTokenGuard)
+  async exportAnalytics(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const workbook = await this.contributionsService.exportAnalytics(
+      claims.tenantId,
+    );
+    return sendWorkbook(res, workbook);
   }
 
   @Get('members/:membershipId/summary')

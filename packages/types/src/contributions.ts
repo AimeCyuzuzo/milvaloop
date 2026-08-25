@@ -164,3 +164,48 @@ export const complianceSummarySchema = z.object({
   overdue: z.number().int().nonnegative(),
 });
 export type ComplianceSummary = z.infer<typeof complianceSummarySchema>;
+
+// GET /contributions/analytics — the tenant-wide report: every number
+// derivable from the ledger in one place, so reading it never requires
+// adding periods or members up by hand. `periods` covers every period
+// since the cooperative's first share price through the current one (not
+// just the current month, unlike compliance-summary above, which exists
+// only for the dashboard's lightweight card); `members` gives every active
+// member's own numbers side by side rather than one at a time.
+export const analyticsTotalsSchema = z.object({
+  activeMembers: z.number().int().nonnegative(),
+  totalSharesOutstanding: z.number().int().nonnegative(),
+  totalCostBasis: z.number().int().nonnegative(),
+  totalCurrentValue: z.number().int().nonnegative(),
+  totalPendingAmount: z.number().int().nonnegative(),
+  totalRejectedAmount: z.number().int().nonnegative(),
+});
+export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
+
+export const analyticsPeriodRowSchema = z.object({
+  period: periodSchema,
+  totalMembers: z.number().int().nonnegative(),
+  satisfied: z.number().int().nonnegative(),
+  partial: z.number().int().nonnegative(),
+  due: z.number().int().nonnegative(),
+  overdue: z.number().int().nonnegative(),
+});
+export type AnalyticsPeriodRow = z.infer<typeof analyticsPeriodRowSchema>;
+
+export const analyticsMemberRowSchema = z.object({
+  membershipId: z.uuid(),
+  email: z.email(),
+  totalShares: z.number().int().nonnegative(),
+  costBasis: z.number().int().nonnegative(),
+  currentValue: z.number().int().nonnegative(),
+  currentPeriodStatus: periodStatusValueSchema.nullable(),
+});
+export type AnalyticsMemberRow = z.infer<typeof analyticsMemberRowSchema>;
+
+export const analyticsResponseSchema = z.object({
+  asOfPeriod: periodSchema,
+  totals: analyticsTotalsSchema,
+  periods: z.array(analyticsPeriodRowSchema),
+  members: z.array(analyticsMemberRowSchema),
+});
+export type AnalyticsResponse = z.infer<typeof analyticsResponseSchema>;
