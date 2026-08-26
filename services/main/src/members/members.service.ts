@@ -7,7 +7,15 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, isNull, ne, schema, type Database } from '@milvaloop/db';
+import {
+  and,
+  eq,
+  isNotNull,
+  isNull,
+  ne,
+  schema,
+  type Database,
+} from '@milvaloop/db';
 import { InviteEmail, renderEmail, type Mailer } from '@milvaloop/email';
 import {
   PERMISSIONS,
@@ -50,10 +58,13 @@ export class MembersService {
     private readonly authService: AuthService,
   ) {}
 
-  // Active memberships and pending invites in one list — see the plan doc's
-  // reasoning: one place to see "who's in this cooperative" regardless of
-  // status. Ungated: every member of a cooperative can see who else is in
-  // it, only the write actions below are permission-gated.
+  // Active memberships, pending invites, and removed memberships in one
+  // list — see the plan doc's reasoning: one place to see "who's in this
+  // cooperative" regardless of status. A removed member stays visible
+  // rather than disappearing (their history is still real, see
+  // ContributionsService), just with none of an active member's levers.
+  // Ungated: every member of a cooperative can see this, only the write
+  // actions below are permission-gated.
   async list(tenantId: string): Promise<MemberListResponse> {
     const activeRows = await this.db
       .select({
@@ -68,6 +79,24 @@ export class MembersService {
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
+      );
+
+    const removedRows = await this.db
+      .select({
+        membershipId: memberships.id,
+        userId: memberships.userId,
+        email: users.email,
+        permissions: memberships.permissions,
+        joinedAt: memberships.createdAt,
+        removedAt: memberships.removedAt,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(
+        and(
+          eq(memberships.tenantId, tenantId),
+          isNotNull(memberships.removedAt),
+        ),
       );
 
     const inviteRows = await this.db
@@ -106,6 +135,18 @@ export class MembersService {
           invitedByUserId: row.invitedByUserId,
           invitedAt: row.invitedAt.toISOString(),
           expiresAt: row.expiresAt.toISOString(),
+        })),
+        ...removedRows.map((row) => ({
+          status: 'removed' as const,
+          membershipId: row.membershipId,
+          userId: row.userId,
+          email: row.email,
+          permissions: row.permissions,
+          joinedAt: row.joinedAt.toISOString(),
+          // Non-null by construction (see the isNotNull filter above) —
+          // Drizzle's column type stays nullable regardless of the query's
+          // WHERE clause, so this is genuinely safe, not a lie to the type.
+          removedAt: row.removedAt!.toISOString(),
         })),
       ],
     };

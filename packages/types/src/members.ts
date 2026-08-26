@@ -100,7 +100,28 @@ export const pendingInviteSchema = z.object({
 });
 export type PendingInvite = z.infer<typeof pendingInviteSchema>;
 
-export const memberListItemSchema = z.discriminatedUnion('status', [activeMemberSchema, pendingInviteSchema]);
+// A removed member stays visible in the same list rather than
+// disappearing — their history is still real and still explainable (see
+// MembersService.list) — but carries none of an active member's levers:
+// no permissions to edit, no reminders preference, nothing else can act
+// on their behalf. `permissions` is what they held right before removal,
+// kept for context, not because it still applies to anything.
+export const removedMemberSchema = z.object({
+  status: z.literal('removed'),
+  membershipId: z.uuid(),
+  userId: z.uuid(),
+  email: z.email(),
+  permissions: z.array(z.string()),
+  joinedAt: z.iso.datetime(),
+  removedAt: z.iso.datetime(),
+});
+export type RemovedMember = z.infer<typeof removedMemberSchema>;
+
+export const memberListItemSchema = z.discriminatedUnion('status', [
+  activeMemberSchema,
+  pendingInviteSchema,
+  removedMemberSchema,
+]);
 export type MemberListItem = z.infer<typeof memberListItemSchema>;
 
 export const memberListResponseSchema = z.object({

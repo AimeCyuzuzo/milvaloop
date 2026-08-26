@@ -25,7 +25,13 @@ export function MemberSummaryCard() {
   const membershipId = selected ?? myMembershipId;
 
   const { data: membersData } = useMembersQuery();
-  const activeMembers = (membersData?.members ?? []).filter((member) => member.status === 'active');
+  // A removed member's history is still real and still worth explaining
+  // (see ContributionsService.getMemberSummary, which never filters
+  // removedAt) — this picker is for *viewing*, not recording, so it stays
+  // open to them, unlike RecordContributionDialog's target picker.
+  const viewableMembers = (membersData?.members ?? []).filter(
+    (member) => member.status === 'active' || member.status === 'removed',
+  );
 
   const { data: summary, isPending } = useMemberSummaryQuery(membershipId);
 
@@ -42,13 +48,15 @@ export function MemberSummaryCard() {
               <SelectValue placeholder="Select a member" />
             </SelectTrigger>
             <SelectContent>
-              {activeMembers.map((member) =>
-                member.status === 'active' ? (
-                  <SelectItem key={member.membershipId} value={member.membershipId}>
-                    {member.membershipId === myMembershipId ? `${member.email} (you)` : member.email}
-                  </SelectItem>
-                ) : null,
-              )}
+              {viewableMembers.map((member) => (
+                <SelectItem key={member.membershipId} value={member.membershipId}>
+                  {member.membershipId === myMembershipId
+                    ? `${member.email} (you)`
+                    : member.status === 'removed'
+                      ? `${member.email} (removed)`
+                      : member.email}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

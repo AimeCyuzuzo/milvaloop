@@ -30,6 +30,9 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
           </div>
         );
       }
+      if (member.status === 'removed') {
+        return <Badge variant="outline">Removed</Badge>;
+      }
       const expired = new Date(member.expiresAt) < new Date();
       return expired ? (
         <Badge variant="destructiveSoft">Expired</Badge>
@@ -60,7 +63,14 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
   },
   {
     id: 'since',
-    accessorFn: (member) => (member.status === 'active' ? member.joinedAt : member.invitedAt),
+    // "Since" always means since entering the status shown next to it —
+    // joined (active), invited (invited), or removed (removed) — not
+    // uniformly "since they first joined".
+    accessorFn: (member) => {
+      if (member.status === 'active') return member.joinedAt;
+      if (member.status === 'removed') return member.removedAt;
+      return member.invitedAt;
+    },
     header: 'Since',
     cell: ({ getValue }) => formatDate(getValue<string>()),
   },
@@ -69,11 +79,16 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
     enableSorting: false,
     cell: ({ row }) => {
       const member = row.original;
-      return member.status === 'active' ? (
-        <MemberRowActions member={member} />
-      ) : (
-        <InviteRowActions invite={member} />
-      );
+      if (member.status === 'active') {
+        return <MemberRowActions member={member} />;
+      }
+      if (member.status === 'removed') {
+        // Nothing can be done on a removed member's behalf any more (see
+        // MembersService/ContributionsService's removedAt checks) — no
+        // action to offer, not even a disabled one.
+        return null;
+      }
+      return <InviteRowActions invite={member} />;
     },
   },
 ];

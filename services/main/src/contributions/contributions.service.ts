@@ -209,6 +209,7 @@ export class ContributionsService {
       callerPermissions,
       input.membershipId,
     );
+    await this.assertMembershipActive(this.db, tenantId, input.membershipId);
 
     const { periods, sharePriceRows } = await this.loadOutstandingPeriods(
       tenantId,
@@ -1047,6 +1048,32 @@ export class ContributionsService {
       throw new ForbiddenException(
         'You can only record a contribution for yourself',
       );
+    }
+  }
+
+  // A removed member's history stays fully visible and explainable (see
+  // getMemberSummary/getAnalytics, neither of which filter removedAt) —
+  // but nothing new gets recorded against them. Checked up front here so
+  // a preview never proposes an allocation that recordContribution would
+  // then reject anyway.
+  private async assertMembershipActive(
+    executor: Database | Transaction,
+    tenantId: string,
+    membershipId: string,
+  ): Promise<void> {
+    const [row] = await executor
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.id, membershipId),
+          eq(memberships.tenantId, tenantId),
+          isNull(memberships.removedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) {
+      throw new NotFoundException('No active member found');
     }
   }
 

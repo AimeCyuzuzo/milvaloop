@@ -169,6 +169,10 @@ describe('Members (e2e)', () => {
       );
     });
 
+    // A removed member staying visible with status 'removed' is covered by
+    // DELETE /members/:membershipId's own test below, which is the more
+    // natural place for "what does removal actually do".
+
     it('rejects an unauthenticated request', async () => {
       const response = await request(app.getHttpServer()).get('/members');
       expect(response.status).toBe(401);
@@ -755,7 +759,7 @@ describe('Members (e2e)', () => {
   });
 
   describe('DELETE /members/:membershipId', () => {
-    it('soft-removes a member so they no longer appear in the list', async () => {
+    it('soft-removes a member, who stays visible in the list with status "removed"', async () => {
       const founder = await signupFounder();
       await inviteAndAccept(founder.accessToken, 'removeme@example.com', []);
       const list = await request(app.getHttpServer())
@@ -776,7 +780,15 @@ describe('Members (e2e)', () => {
       const updatedList = await request(app.getHttpServer())
         .get('/members')
         .set('Authorization', `Bearer ${founder.accessToken}`);
-      expect(bodyAs<MemberListResponse>(updatedList).members).toHaveLength(1);
+      const updatedMembers = bodyAs<MemberListResponse>(updatedList).members;
+      expect(updatedMembers).toHaveLength(2);
+      expect(updatedMembers).toContainEqual(
+        expect.objectContaining({
+          status: 'removed',
+          membershipId: target.membershipId,
+          email: 'removeme@example.com',
+        }),
+      );
     });
 
     it('blocks removing the only remaining admin', async () => {

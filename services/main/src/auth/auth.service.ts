@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { and, eq, gt, schema, type Database } from '@milvaloop/db';
+import { and, eq, gt, isNull, schema, type Database } from '@milvaloop/db';
 import {
   EmailVerificationEmail,
   MagicLinkEmail,
@@ -519,6 +519,7 @@ export class AuthService {
         and(
           eq(memberships.userId, userId),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -569,6 +570,7 @@ export class AuthService {
         and(
           eq(memberships.userId, claims.sub),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -638,7 +640,9 @@ export class AuthService {
       .select({ tenant: tenants, membership: memberships })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, user.id));
+      .where(
+        and(eq(memberships.userId, user.id), isNull(memberships.removedAt)),
+      );
 
     if (rows.length === 1) {
       const { tenant, membership } = rows[0];
@@ -755,7 +759,9 @@ export class AuthService {
       .select({ tenant: tenants })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, userId));
+      .where(
+        and(eq(memberships.userId, userId), isNull(memberships.removedAt)),
+      );
     return rows.map(({ tenant }) => ({
       id: tenant.id,
       name: tenant.name,
@@ -844,6 +850,13 @@ export class AuthService {
     });
   }
 
+  // Backs refresh() and getCurrentSession() — the two places a session
+  // gets re-validated after it was first issued. Filtering removedAt here
+  // (not just at login) is what actually makes removal take effect for
+  // someone already signed in: their session keeps working off its
+  // current access token until that expires, then the next refresh (or
+  // the next GET /auth/me) finds no active membership and ends it, the
+  // same way an already-revoked session or a deleted account does.
   private async loadSessionContext(userId: string, tenantId: string) {
     const [tenant] = await this.db
       .select()
@@ -859,7 +872,11 @@ export class AuthService {
       .select()
       .from(memberships)
       .where(
-        and(eq(memberships.userId, userId), eq(memberships.tenantId, tenantId)),
+        and(
+          eq(memberships.userId, userId),
+          eq(memberships.tenantId, tenantId),
+          isNull(memberships.removedAt),
+        ),
       )
       .limit(1);
 

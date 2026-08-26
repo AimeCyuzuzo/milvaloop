@@ -79,6 +79,21 @@ describe('Auth (e2e)', () => {
     return response;
   }
 
+  // Shared by the multi-cooperative login tests and the removed-membership
+  // tests below — both need a user who belongs to two cooperatives.
+  async function signupFounderWithSecondCooperative() {
+    const signup = await signupFounder();
+    const { accessToken } = bodyAs<AuthSession>(signup);
+
+    const secondCooperative = await request(app.getHttpServer())
+      .post('/cooperatives')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: 'Second Coop' });
+    expect(secondCooperative.status).toBe(201);
+
+    return { signup, accessToken };
+  }
+
   function extractRefreshCookie(response: request.Response): string {
     const cookies = response.get('Set-Cookie');
     const refreshCookie = cookies?.find((cookie) =>
@@ -609,19 +624,6 @@ describe('Auth (e2e)', () => {
   });
 
   describe('multi-cooperative login', () => {
-    async function signupFounderWithSecondCooperative() {
-      const signup = await signupFounder();
-      const { accessToken } = bodyAs<AuthSession>(signup);
-
-      const secondCooperative = await request(app.getHttpServer())
-        .post('/cooperatives')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .send({ name: 'Second Coop' });
-      expect(secondCooperative.status).toBe(201);
-
-      return { signup, accessToken };
-    }
-
     it('offers a picker when the user belongs to more than one cooperative', async () => {
       await signupFounderWithSecondCooperative();
 
@@ -773,6 +775,80 @@ describe('Auth (e2e)', () => {
       expect(created.tenant.slug).toBe('fresh-start');
       expect(created.permissions).toEqual(['tenant:admin']);
       expect(create.get('Set-Cookie')?.join(';')).toContain('refreshToken=');
+    });
+  });
+
+  describe('a removed membership', () => {
+    // Simulates removal directly against the database, the same effect
+    // MembersService.remove has — this file has no MembersController
+    // wired in, and the removedAt enforcement being tested here lives
+    // entirely in AuthService, not in how the removal itself happened.
+    async function removeMembership(tenantId: string): Promise<void> {
+      await testDb.db
+        .update(schema.memberships)
+        .set({ removedAt: new Date() })
+        .where(eq(schema.memberships.tenantId, tenantId));
+    }
+
+    it('cannot log in once their only membership is removed', async () => {
+      const signup = await signupFounder();
+      const { tenant } = bodyAs<AuthSession>(signup);
+      await removeMembership(tenant.id);
+
+      const login = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: FOUNDER.email, password: FOUNDER.password });
+
+      expect(login.status).toBe(200);
+      const result = bodyAs<LoginResult>(login);
+      // Their password is still correct and their account still exists —
+      // they just have no active membership anywhere, same response a
+      // brand-new user with no cooperative yet would get.
+      expect(result.status).toBe('no_cooperatives');
+    });
+
+    it('drops out of the cooperative picker once removed, and cannot be selected', async () => {
+      const { signup } = await signupFounderWithSecondCooperative();
+      const { tenant: removedTenant } = bodyAs<AuthSession>(signup);
+      await removeMembership(removedTenant.id);
+
+      const login = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: FOUNDER.email, password: FOUNDER.password });
+      const result = bodyAs<LoginResult>(login);
+      if (result.status !== 'authenticated') {
+        // Only one active cooperative remains, so login finishes outright
+        // rather than offering a picker with just one entry.
+        throw new Error(`Expected authenticated, got "${result.status}"`);
+      }
+      expect(result.tenant.slug).toBe('second-coop');
+    });
+
+    it("can't refresh a session for a membership removed after it was issued", async () => {
+      const signup = await signupFounder();
+      const { tenant } = bodyAs<AuthSession>(signup);
+      const refreshCookie = extractRefreshCookie(signup);
+
+      await removeMembership(tenant.id);
+
+      const refresh = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', refreshCookie);
+
+      expect(refresh.status).toBe(401);
+    });
+
+    it('ends GET /auth/me for a membership removed after it was issued', async () => {
+      const signup = await signupFounder();
+      const { accessToken, tenant } = bodyAs<AuthSession>(signup);
+
+      await removeMembership(tenant.id);
+
+      const me = await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(me.status).toBe(401);
     });
   });
 });

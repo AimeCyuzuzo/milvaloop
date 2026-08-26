@@ -311,6 +311,29 @@ describe('Contributions (e2e)', () => {
       expect(response.status).toBe(400);
     });
 
+    it('rejects previewing an allocation for a removed member', async () => {
+      const founder = await signupFounder();
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await inviteAndAccept(
+        founder.accessToken,
+        'removedtarget@example.com',
+        [],
+      );
+      const removedMembershipId = await membershipIdByEmail(
+        founder.accessToken,
+        'removedtarget@example.com',
+      );
+      await request(app.getHttpServer())
+        .delete(`/members/${removedMembershipId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/preview')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ membershipId: removedMembershipId, amount: SHARE_PRICE });
+      expect(response.status).toBe(404);
+    });
+
     it('proposes a single satisfied period for an exact single-share amount', async () => {
       const founder = await signupFounder();
       const founderMembershipId = await activeMembershipId(founder.accessToken);
@@ -811,6 +834,65 @@ describe('Contributions (e2e)', () => {
       const membersSheet = workbook.getWorksheet('By member');
       expect(membersSheet?.getRow(2).getCell(1).value).toBe(founder.user.email);
       expect(membersSheet?.getRow(2).getCell(2).value).toBe(1);
+    });
+  });
+
+  describe('a removed member', () => {
+    it('keeps their ledger entry and summary visible, but drops out of analytics', async () => {
+      const founder = await signupFounder();
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await inviteAndAccept(
+        founder.accessToken,
+        'formermember@example.com',
+        [],
+      );
+      const formerMembershipId = await membershipIdByEmail(
+        founder.accessToken,
+        'formermember@example.com',
+      );
+      await recordContribution(
+        founder.accessToken,
+        formerMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      await request(app.getHttpServer())
+        .delete(`/members/${formerMembershipId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const ledger = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'approved' });
+      const ledgerEntries = bodyAs<{
+        contributions: Array<{ member: { email: string } }>;
+      }>(ledger).contributions;
+      expect(ledgerEntries.map((entry) => entry.member.email)).toContain(
+        'formermember@example.com',
+      );
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${formerMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(summary.status).toBe(200);
+      expect(bodyAs<MemberContributionSummary>(summary).totalShares).toBe(1);
+
+      // Analytics reports the current active roster, not who used to be on
+      // it — a removed member's totals no longer count toward "how is the
+      // cooperative doing right now" (see ContributionsService.getAnalytics).
+      const analytics = await request(app.getHttpServer())
+        .get('/contributions/analytics')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const members = bodyAs<{ members: Array<{ email: string }> }>(
+        analytics,
+      ).members;
+      expect(members.map((member) => member.email)).not.toContain(
+        'formermember@example.com',
+      );
     });
   });
 
