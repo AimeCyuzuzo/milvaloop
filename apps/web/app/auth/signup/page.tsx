@@ -25,7 +25,7 @@ export default function SignupPage() {
 
   const form = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { tenantName: '', email: '', password: '' },
+    defaultValues: { tenantName: '', name: '', email: '', password: '' },
   });
 
   async function onSubmit(values: SignupInput) {
@@ -72,6 +72,19 @@ export default function SignupPage() {
               )}
             />
             <CooperativeSlugPreview name={form.watch('tenantName')} />
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Your name</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="email"

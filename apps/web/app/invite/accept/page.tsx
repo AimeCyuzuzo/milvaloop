@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { passwordSchema } from '@milvaloop/types';
+import { passwordSchema, personNameSchema } from '@milvaloop/types';
 import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
@@ -139,7 +139,7 @@ function AcceptAsCurrentUserCard({ token, tenantName }: { token: string; tenantN
   );
 }
 
-const createAccountFormSchema = z.object({ password: passwordSchema });
+const createAccountFormSchema = z.object({ name: personNameSchema, password: passwordSchema });
 type CreateAccountFormValues = z.infer<typeof createAccountFormSchema>;
 
 function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; email: string; tenantName: string }) {
@@ -150,7 +150,7 @@ function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; 
 
   const form = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountFormSchema),
-    defaultValues: { password: '' },
+    defaultValues: { name: '', password: '' },
   });
 
   async function onSubmit(values: CreateAccountFormValues) {
@@ -190,6 +190,19 @@ function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; 
         ) : null}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Your name</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="password"

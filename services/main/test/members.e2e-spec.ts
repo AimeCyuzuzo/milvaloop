@@ -65,6 +65,7 @@ describe('Members (e2e)', () => {
 
   const FOUNDER = {
     tenantName: 'Members Test Coop',
+    name: 'Founder Person',
     email: 'founder@example.com',
     password: 'correct-horse-battery',
   };
@@ -89,7 +90,7 @@ describe('Members (e2e)', () => {
     const token = extractInviteToken(sentEmails, email);
     const response = await request(app.getHttpServer())
       .post('/members/invites/accept')
-      .send({ token, password: PASSWORD });
+      .send({ token, name: 'Invited Member', password: PASSWORD });
     return bodyAs<AuthSession>(response);
   }
 
@@ -265,7 +266,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'New Person', password: PASSWORD });
 
       expect(response.status).toBe(200);
       const session = bodyAs<AuthSession & { status: string }>(response);
@@ -284,6 +285,7 @@ describe('Members (e2e)', () => {
       await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'second@example.com',
         password: PASSWORD,
       };
@@ -300,7 +302,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Founder Person', password: PASSWORD });
 
       expect(response.status).toBe(409);
     });
@@ -322,7 +324,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token });
+        .send({ token, name: 'No Password' });
       expect(response.status).toBe(400);
     });
 
@@ -336,12 +338,12 @@ describe('Members (e2e)', () => {
 
       const first = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Once Only', password: PASSWORD });
       expect(first.status).toBe(200);
 
       const second = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Once Only', password: PASSWORD });
       expect(second.status).toBe(400);
     });
   });
@@ -372,6 +374,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'lookup-existing@example.com',
         password: PASSWORD,
       };
@@ -407,7 +410,7 @@ describe('Members (e2e)', () => {
       );
       await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Consumed Invite', password: PASSWORD });
 
       const response = await request(app.getHttpServer())
         .get('/members/invites/lookup')
@@ -431,6 +434,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'joiner@example.com',
         password: PASSWORD,
       };
@@ -465,6 +469,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const other = {
         tenantName: 'Other Coop',
+        name: 'Other Person',
         email: 'notinvited@example.com',
         password: PASSWORD,
       };
@@ -509,6 +514,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'usedjoin@example.com',
         password: PASSWORD,
       };
@@ -553,7 +559,7 @@ describe('Members (e2e)', () => {
 
       const acceptResponse = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Revoke Me', password: PASSWORD });
       expect(acceptResponse.status).toBe(400);
     });
 
@@ -814,7 +820,7 @@ describe('Members (e2e)', () => {
         .reverse()
         .find((email) => email.to === 'removeme2@example.com');
       expect(removalEmail?.subject).toContain('removed from');
-      expect(removalEmail?.html).toContain(FOUNDER.email);
+      expect(removalEmail?.html).toContain(FOUNDER.name);
     });
 
     it('blocks removing the only remaining admin', async () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { passwordSchema } from './auth.js';
+import { passwordSchema, personNameSchema } from './auth.js';
 import { PERMISSIONS, type Permission } from './permissions.js';
 
 // TENANT_ADMIN is deliberately excluded — granting full admin access is a
@@ -67,6 +67,7 @@ export type InviteLookupResult = z.infer<typeof inviteLookupResultSchema>;
 // instead, so password is always required here now.
 export const acceptInviteSchema = z.object({
   token: z.string().min(1),
+  name: personNameSchema,
   password: passwordSchema,
 });
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
@@ -78,6 +79,7 @@ export const activeMemberSchema = z.object({
   status: z.literal('active'),
   membershipId: z.uuid(),
   userId: z.uuid(),
+  name: z.string(),
   email: z.email(),
   permissions: z.array(z.string()),
   joinedAt: z.iso.datetime(),
@@ -110,6 +112,7 @@ export const removedMemberSchema = z.object({
   status: z.literal('removed'),
   membershipId: z.uuid(),
   userId: z.uuid(),
+  name: z.string(),
   email: z.email(),
   permissions: z.array(z.string()),
   joinedAt: z.iso.datetime(),

@@ -2,6 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { PERMISSIONS, type MemberListItem } from '@milvaloop/types';
 
 import { Badge } from '@milvaloop/ui/badge';
+import { Typography } from '@milvaloop/ui/typography';
 
 import { InviteRowActions } from './invite-row-actions';
 import { MemberRowActions } from './member-row-actions';
@@ -13,8 +14,25 @@ function formatDate(iso: string) {
 
 export const memberColumns: ColumnDef<MemberListItem>[] = [
   {
-    accessorKey: 'email',
+    id: 'member',
+    accessorFn: (member) => (member.status === 'invited' ? member.email : member.name),
     header: 'Member',
+    // An invite has no name yet — nobody has created an account to have
+    // one — so it shows only the email it was sent to, same as before.
+    cell: ({ row }) => {
+      const member = row.original;
+      if (member.status === 'invited') {
+        return member.email;
+      }
+      return (
+        <div className="flex flex-col">
+          <span>{member.name}</span>
+          <Typography variant="small" color="muted">
+            {member.email}
+          </Typography>
+        </div>
+      );
+    },
   },
   {
     id: 'status',

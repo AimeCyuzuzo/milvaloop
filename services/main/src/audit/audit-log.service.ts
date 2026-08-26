@@ -57,6 +57,7 @@ export class AuditLogService {
         entityType: auditEvents.entityType,
         entityId: auditEvents.entityId,
         metadata: auditEvents.metadata,
+        actorName: users.name,
         actorEmail: users.email,
         createdAt: auditEvents.createdAt,
       })
@@ -73,7 +74,10 @@ export class AuditLogService {
         entityType: row.entityType,
         entityId: row.entityId,
         metadata: row.metadata as Record<string, unknown>,
-        actor: row.actorEmail ? { email: row.actorEmail } : null,
+        actor:
+          row.actorEmail && row.actorName
+            ? { name: row.actorName, email: row.actorEmail }
+            : null,
         createdAt: row.createdAt.toISOString(),
       })),
     };

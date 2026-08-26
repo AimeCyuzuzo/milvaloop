@@ -51,10 +51,10 @@ export function MemberSummaryCard() {
               {viewableMembers.map((member) => (
                 <SelectItem key={member.membershipId} value={member.membershipId}>
                   {member.membershipId === myMembershipId
-                    ? `${member.email} (you)`
+                    ? `${member.name} (you)`
                     : member.status === 'removed'
-                      ? `${member.email} (removed)`
-                      : member.email}
+                      ? `${member.name} (removed)`
+                      : member.name}
                 </SelectItem>
               ))}
             </SelectContent>

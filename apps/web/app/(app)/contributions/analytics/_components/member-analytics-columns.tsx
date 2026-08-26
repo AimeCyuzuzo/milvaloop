@@ -8,7 +8,7 @@ import { PERIOD_STATUS_BADGE_VARIANT, PERIOD_STATUS_LABEL } from '@/lib/contribu
 
 export const memberAnalyticsColumns: ColumnDef<AnalyticsMemberRow>[] = [
   {
-    accessorKey: 'email',
+    accessorKey: 'name',
     header: 'Member',
   },
   {

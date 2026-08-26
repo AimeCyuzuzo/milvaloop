@@ -287,7 +287,7 @@ export class ContributionsService {
       );
 
       const [member] = await tx
-        .select({ id: memberships.id, email: users.email })
+        .select({ id: memberships.id, name: users.name, email: users.email })
         .from(memberships)
         .innerJoin(users, eq(memberships.userId, users.id))
         .where(
@@ -345,6 +345,7 @@ export class ContributionsService {
         entityId: contribution.id,
         metadata: {
           membershipId: input.membershipId,
+          name: member.name,
           email: member.email,
           amount: input.amount,
           allocations: input.allocations,
@@ -389,6 +390,10 @@ export class ContributionsService {
         })
         .where(eq(contributions.id, contributionId));
 
+      const approvedMember = await this.loadMembershipContact(
+        tx,
+        contribution.membershipId,
+      );
       await this.auditLog.record(tx, {
         tenantId,
         actorUserId: approverUserId,
@@ -397,7 +402,8 @@ export class ContributionsService {
         entityId: contributionId,
         metadata: {
           membershipId: contribution.membershipId,
-          email: await this.loadMembershipEmail(tx, contribution.membershipId),
+          name: approvedMember?.name,
+          email: approvedMember?.email,
           amount: contribution.amount,
         },
       });
@@ -442,6 +448,10 @@ export class ContributionsService {
         })
         .where(eq(contributions.id, contributionId));
 
+      const rejectedMember = await this.loadMembershipContact(
+        tx,
+        contribution.membershipId,
+      );
       await this.auditLog.record(tx, {
         tenantId,
         actorUserId: approverUserId,
@@ -450,7 +460,8 @@ export class ContributionsService {
         entityId: contributionId,
         metadata: {
           membershipId: contribution.membershipId,
-          email: await this.loadMembershipEmail(tx, contribution.membershipId),
+          name: rejectedMember?.name,
+          email: rejectedMember?.email,
           amount: contribution.amount,
           reason,
         },
@@ -550,7 +561,7 @@ export class ContributionsService {
 
     const current = this.currentPeriod();
     const activeMemberships = await this.db
-      .select({ id: memberships.id, email: users.email })
+      .select({ id: memberships.id, name: users.name, email: users.email })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(
@@ -600,12 +611,13 @@ export class ContributionsService {
     const { pending: totalPendingAmount, rejected: totalRejectedAmount } =
       await this.sumContributionsByStatus(tenantId);
 
-    const membersByEmail = new Map(
-      activeMemberships.map((membership) => [membership.id, membership.email]),
+    const membersById = new Map(
+      activeMemberships.map((membership) => [membership.id, membership]),
     );
     const members: AnalyticsMemberRow[] = snapshots.map((snapshot) => ({
       membershipId: snapshot.membershipId,
-      email: membersByEmail.get(snapshot.membershipId) ?? '',
+      name: membersById.get(snapshot.membershipId)?.name ?? '',
+      email: membersById.get(snapshot.membershipId)?.email ?? '',
       totalShares: snapshot.totalShares,
       costBasis: snapshot.costBasis,
       currentValue: snapshot.currentValue,
@@ -693,13 +705,15 @@ export class ContributionsService {
     const membersSheet: ExportSheet = {
       name: 'By member',
       columns: [
-        { header: 'Member', key: 'email', width: 28 },
+        { header: 'Member', key: 'name', width: 24 },
+        { header: 'Email', key: 'email', width: 28 },
         { header: 'Shares owned', key: 'totalShares' },
         { header: 'Total contributed (RWF)', key: 'costBasis' },
         { header: "Value at today's price (RWF)", key: 'currentValue' },
         { header: 'Current period status', key: 'currentPeriodStatus' },
       ],
       rows: analytics.members.map((member) => ({
+        name: member.name,
         email: member.email,
         totalShares: member.totalShares,
         costBasis: member.costBasis,
@@ -820,6 +834,7 @@ export class ContributionsService {
         rejectionReason: contributions.rejectionReason,
         createdAt: contributions.createdAt,
         memberMembershipId: contributions.membershipId,
+        memberName: users.name,
         memberEmail: users.email,
         recordedByMembershipId: contributions.recordedByMembershipId,
         approvedByMembershipId: contributions.approvedByMembershipId,
@@ -829,24 +844,33 @@ export class ContributionsService {
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(and(...conditions));
 
-    const actorEmailByMembershipId = await this.loadMembershipEmails(tenantId);
+    const contactByMembershipId = await this.loadMembershipContacts(tenantId);
 
     const items: ContributionListItem[] = rows.map((row) => ({
       id: row.id,
-      member: { membershipId: row.memberMembershipId, email: row.memberEmail },
+      member: {
+        membershipId: row.memberMembershipId,
+        name: row.memberName,
+        email: row.memberEmail,
+      },
       amount: row.amount,
       contributedAt: row.contributedAt.toISOString().slice(0, 10),
       status: row.status as ContributionListItem['status'],
       note: row.note,
       recordedBy: {
         membershipId: row.recordedByMembershipId,
-        email: actorEmailByMembershipId.get(row.recordedByMembershipId) ?? '',
+        name: contactByMembershipId.get(row.recordedByMembershipId)?.name ?? '',
+        email:
+          contactByMembershipId.get(row.recordedByMembershipId)?.email ?? '',
       },
       approvedBy: row.approvedByMembershipId
         ? {
             membershipId: row.approvedByMembershipId,
+            name:
+              contactByMembershipId.get(row.approvedByMembershipId)?.name ?? '',
             email:
-              actorEmailByMembershipId.get(row.approvedByMembershipId) ?? '',
+              contactByMembershipId.get(row.approvedByMembershipId)?.email ??
+              '',
           }
         : null,
       rejectionReason: row.rejectionReason,
@@ -871,22 +895,22 @@ export class ContributionsService {
     const sheet: ExportSheet = {
       name: 'Contributions',
       columns: [
-        { header: 'Member', key: 'member', width: 28 },
+        { header: 'Member', key: 'member', width: 24 },
         { header: 'Amount (RWF)', key: 'amount' },
         { header: 'Contributed on', key: 'contributedAt' },
         { header: 'Status', key: 'status' },
-        { header: 'Recorded by', key: 'recordedBy', width: 28 },
-        { header: 'Approved by', key: 'approvedBy', width: 28 },
+        { header: 'Recorded by', key: 'recordedBy', width: 24 },
+        { header: 'Approved by', key: 'approvedBy', width: 24 },
         { header: 'Rejection reason', key: 'rejectionReason', width: 32 },
         { header: 'Note', key: 'note', width: 32 },
       ],
       rows: items.map((item) => ({
-        member: item.member.email,
+        member: item.member.name,
         amount: item.amount,
         contributedAt: item.contributedAt,
         status: item.status,
-        recordedBy: item.recordedBy.email,
-        approvedBy: item.approvedBy?.email ?? null,
+        recordedBy: item.recordedBy.name,
+        approvedBy: item.approvedBy?.name ?? null,
         rejectionReason: item.rejectionReason,
         note: item.note,
       })),
@@ -948,22 +972,22 @@ export class ContributionsService {
     return membership.id;
   }
 
-  // Membership emails don't move once a membership exists (see users.email
+  // A membership's name/email don't move once it exists (see users.email
   // and memberships.userId — a membership is never reassigned to a
   // different user), so this doesn't need `removedAt IS NULL` the way an
   // authorization check would: an audit event about a since-removed
   // member should still name them, not go blank.
-  private async loadMembershipEmail(
+  private async loadMembershipContact(
     executor: Database | Transaction,
     membershipId: string,
-  ): Promise<string | undefined> {
+  ): Promise<{ name: string; email: string } | undefined> {
     const [row] = await executor
-      .select({ email: users.email })
+      .select({ name: users.name, email: users.email })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(memberships.id, membershipId))
       .limit(1);
-    return row?.email;
+    return row;
   }
 
   // A period's price is pinned by the first allocation ever created for
@@ -1288,15 +1312,24 @@ export class ContributionsService {
     return rows.reduce((total, row) => total + row.amount, 0);
   }
 
-  private async loadMembershipEmails(
+  private async loadMembershipContacts(
     tenantId: string,
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, { name: string; email: string }>> {
     const rows = await this.db
-      .select({ membershipId: memberships.id, email: users.email })
+      .select({
+        membershipId: memberships.id,
+        name: users.name,
+        email: users.email,
+      })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(memberships.tenantId, tenantId));
-    return new Map(rows.map((row) => [row.membershipId, row.email]));
+    return new Map(
+      rows.map((row) => [
+        row.membershipId,
+        { name: row.name, email: row.email },
+      ]),
+    );
   }
 
   private async loadPeriodLabel(contributionId: string): Promise<string> {
@@ -1312,7 +1345,7 @@ export class ContributionsService {
     contribution: typeof contributions.$inferSelect,
   ): Promise<void> {
     const [member] = await this.db
-      .select({ email: users.email })
+      .select({ name: users.name, email: users.email })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(memberships.id, contribution.membershipId))
@@ -1330,7 +1363,7 @@ export class ContributionsService {
 
     const { html, text } = await renderEmail(
       ContributionApprovedEmail({
-        memberName: member.email,
+        memberName: member.name,
         cooperativeName: tenant.name,
         periodLabel: periodLabel || 'your contribution',
         amount: contribution.amount,
@@ -1370,9 +1403,9 @@ export class ContributionsService {
       return;
     }
 
-    const emailByMembershipId = await this.loadMembershipEmails(tenantId);
-    const memberEmail = emailByMembershipId.get(contribution.membershipId);
-    const recorderEmail = emailByMembershipId.get(
+    const contactByMembershipId = await this.loadMembershipContacts(tenantId);
+    const member = contactByMembershipId.get(contribution.membershipId);
+    const recorder = contactByMembershipId.get(
       contribution.recordedByMembershipId,
     );
     const [tenant] = await this.db
@@ -1380,7 +1413,7 @@ export class ContributionsService {
       .from(tenants)
       .where(eq(tenants.id, tenantId))
       .limit(1);
-    if (!memberEmail || !recorderEmail || !tenant) {
+    if (!member || !recorder || !tenant) {
       return;
     }
 
@@ -1389,15 +1422,15 @@ export class ContributionsService {
 
     await Promise.all(
       eligibleApprovers.map(async (approver) => {
-        const approverEmail = emailByMembershipId.get(approver.id);
-        if (!approverEmail) {
+        const approverContact = contactByMembershipId.get(approver.id);
+        if (!approverContact) {
           return;
         }
         const { html, text } = await renderEmail(
           ContributionPendingApprovalEmail({
-            approverName: approverEmail,
-            recorderName: recorderEmail,
-            memberName: memberEmail,
+            approverName: approverContact.name,
+            recorderName: recorder.name,
+            memberName: member.name,
             cooperativeName: tenant.name,
             periodLabel: periodLabel || 'a contribution',
             amount: contribution.amount,
@@ -1406,14 +1439,14 @@ export class ContributionsService {
         );
         await this.mailer
           .send({
-            to: approverEmail,
+            to: approverContact.email,
             subject: `A contribution to ${tenant.name} needs your approval`,
             html,
             text,
           })
           .catch((error: unknown) => {
             this.logger.error(
-              `Failed to send pending-approval email for contribution ${contribution.id} to ${approverEmail}`,
+              `Failed to send pending-approval email for contribution ${contribution.id} to ${approverContact.email}`,
               error,
             );
           });

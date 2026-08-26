@@ -77,7 +77,7 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
         open={approveOpen}
         onOpenChange={setApproveOpen}
         title="Approve this contribution?"
-        description={`${contribution.member.email}'s ${formatAmount(contribution.amount)} contribution paid on ${formatDate(contribution.contributedAt)} will be added to the official ledger. This can't be undone from here.`}
+        description={`${contribution.member.name}'s ${formatAmount(contribution.amount)} contribution paid on ${formatDate(contribution.contributedAt)} will be added to the official ledger. This can't be undone from here.`}
         confirmLabel="Approve"
         pendingLabel="Approving…"
         onConfirm={handleApprove}

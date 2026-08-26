@@ -20,7 +20,7 @@ function capitalize(value: string): string {
 export const contributionColumns: ColumnDef<ContributionListItem>[] = [
   {
     id: 'member',
-    accessorFn: (row) => row.member.email,
+    accessorFn: (row) => row.member.name,
     header: 'Member',
   },
   {
@@ -44,7 +44,7 @@ export const contributionColumns: ColumnDef<ContributionListItem>[] = [
   },
   {
     id: 'recordedBy',
-    accessorFn: (row) => row.recordedBy.email,
+    accessorFn: (row) => row.recordedBy.name,
     header: 'Recorded by',
   },
   {

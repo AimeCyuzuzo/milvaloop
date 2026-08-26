@@ -65,6 +65,7 @@ describe('Contribution reminders (e2e)', () => {
 
   const FOUNDER = {
     tenantName: 'Reminders Test Coop',
+    name: 'Founder Person',
     email: 'founder@example.com',
     password: 'correct-horse-battery',
   };

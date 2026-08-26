@@ -32,6 +32,7 @@ import {
   type SignupInput,
   type SlugPreviewResult,
   type SwitchCooperativeInput,
+  type UpdateProfileInput,
 } from '@milvaloop/types';
 import * as argon2 from 'argon2';
 
@@ -99,6 +100,7 @@ export type LoginOutcome =
 
 interface UserRow {
   id: string;
+  name: string;
   email: string;
   passwordHash: string;
   emailVerifiedAt: Date | null;
@@ -133,7 +135,7 @@ export class AuthService {
         async (tx) => {
           const [user] = await tx
             .insert(users)
-            .values({ email: input.email, passwordHash })
+            .values({ name: input.name, email: input.email, passwordHash })
             .returning();
           const { tenant, membership } = await this.insertTenantAndMembership(
             tx,
@@ -503,6 +505,19 @@ export class AuthService {
     await this.revokeAllSessions(user.id);
   }
 
+  // A display name is a low-stakes profile field, not a security
+  // credential — no current-value confirmation needed the way a password
+  // change requires one, and it doesn't revoke other sessions.
+  async updateProfile(
+    claims: AccessTokenClaims,
+    input: UpdateProfileInput,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ name: input.name })
+      .where(eq(users.id, claims.sub));
+  }
+
   async selectCooperative(
     input: SelectCooperativeInput,
   ): Promise<IssuedSession> {
@@ -619,6 +634,7 @@ export class AuthService {
     return {
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
         emailVerified: !!user.emailVerifiedAt,
       },
@@ -946,6 +962,7 @@ export class AuthService {
         accessToken,
         user: {
           id: user.id,
+          name: user.name,
           email: user.email,
           emailVerified: !!user.emailVerifiedAt,
         },

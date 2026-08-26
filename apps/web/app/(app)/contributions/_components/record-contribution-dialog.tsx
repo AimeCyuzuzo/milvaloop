@@ -195,7 +195,7 @@ export function RecordContributionDialog({
                           {activeMembers.map((member) =>
                             member.status === 'active' ? (
                               <SelectItem key={member.membershipId} value={member.membershipId}>
-                                {member.email}
+                                {member.name}
                               </SelectItem>
                             ) : null,
                           )}

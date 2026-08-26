@@ -81,6 +81,7 @@ export type ContributionListQuery = z.infer<typeof contributionListQuerySchema>;
 
 export const contributionActorSchema = z.object({
   membershipId: z.uuid(),
+  name: z.string(),
   email: z.email(),
 });
 export type ContributionActor = z.infer<typeof contributionActorSchema>;
@@ -194,6 +195,7 @@ export type AnalyticsPeriodRow = z.infer<typeof analyticsPeriodRowSchema>;
 
 export const analyticsMemberRowSchema = z.object({
   membershipId: z.uuid(),
+  name: z.string(),
   email: z.email(),
   totalShares: z.number().int().nonnegative(),
   costBasis: z.number().int().nonnegative(),

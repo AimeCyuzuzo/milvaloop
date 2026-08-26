@@ -23,12 +23,12 @@ export function AppSidebar({
   tenantId,
   tenantName,
   cooperatives,
-  email,
+  name,
 }: {
   tenantId: string;
   tenantName: string;
   cooperatives: CooperativeSummary[];
-  email: string;
+  name: string;
 }) {
   const pathname = usePathname();
   const navItems = useVisibleNavItems();
@@ -58,7 +58,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <AccountMenu email={email} />
+        <AccountMenu name={name} />
       </SidebarFooter>
     </Sidebar>
   );

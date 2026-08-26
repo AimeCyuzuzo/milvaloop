@@ -45,7 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         tenantId={session.tenant.id}
         tenantName={session.tenant.name}
         cooperatives={session.cooperatives}
-        email={session.user.email}
+        name={session.user.name}
       />
       <SidebarInset>
         <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4">

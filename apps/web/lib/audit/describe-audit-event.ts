@@ -3,7 +3,7 @@ import type { AuditEvent } from '@milvaloop/types';
 import { formatAmount, formatPeriodLabel } from '../contributions/format-period';
 
 function actorLabel(event: AuditEvent): string {
-  return event.actor?.email ?? 'Someone';
+  return event.actor?.name ?? 'Someone';
 }
 
 function stringField(metadata: Record<string, unknown>, key: string): string | undefined {
@@ -17,13 +17,14 @@ function numberField(metadata: Record<string, unknown>, key: string): number | u
 }
 
 // The subject of a member-scoped event: whichever member the action was
-// about, not the actor who did it. Every action that has one embeds an
-// `email` directly in its own metadata (see contributions.service.ts and
+// about, not the actor who did it. Every action that has one embeds a
+// `name` (and `email`, kept for the rare event predating this field)
+// directly in its own metadata (see contributions.service.ts and
 // members.service.ts) — an audit log should stay legible on its own,
 // without depending on a live lookup against current membership state
 // that may no longer include the person by the time this is read.
 function subjectLabel(event: AuditEvent): string {
-  return stringField(event.metadata, 'email') ?? 'a member';
+  return stringField(event.metadata, 'name') ?? stringField(event.metadata, 'email') ?? 'a member';
 }
 
 type Describer = (event: AuditEvent) => string;

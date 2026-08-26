@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { acceptInviteSchema, inviteLookupResultSchema, updateReminderPauseSchema } from './members.js';
 
 describe('acceptInviteSchema', () => {
-  it('accepts a token and password', () => {
-    const result = acceptInviteSchema.safeParse({ token: 'abc123', password: 'correct-horse-battery' });
+  it('accepts a token, name, and password', () => {
+    const result = acceptInviteSchema.safeParse({
+      token: 'abc123',
+      name: 'New Member',
+      password: 'correct-horse-battery',
+    });
     expect(result.success).toBe(true);
   });
 
@@ -14,12 +18,21 @@ describe('acceptInviteSchema', () => {
   });
 
   it('rejects a password under 8 characters', () => {
-    const result = acceptInviteSchema.safeParse({ token: 'abc123', password: 'short' });
+    const result = acceptInviteSchema.safeParse({ token: 'abc123', name: 'New Member', password: 'short' });
     expect(result.success).toBe(false);
   });
 
   it('rejects an empty token', () => {
-    const result = acceptInviteSchema.safeParse({ token: '', password: 'correct-horse-battery' });
+    const result = acceptInviteSchema.safeParse({
+      token: '',
+      name: 'New Member',
+      password: 'correct-horse-battery',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty name', () => {
+    const result = acceptInviteSchema.safeParse({ token: 'abc123', name: '', password: 'correct-horse-battery' });
     expect(result.success).toBe(false);
   });
 });

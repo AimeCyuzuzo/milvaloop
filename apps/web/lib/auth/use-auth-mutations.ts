@@ -4,6 +4,7 @@ import type {
   ChangePasswordInput,
   CreateCooperativeInput,
   CreateFirstCooperativeInput,
+  CurrentSession,
   EmailVerificationConsumeInput,
   ForgotPasswordInput,
   LoginInput,
@@ -14,6 +15,7 @@ import type {
   SelectCooperativeInput,
   SignupInput,
   SwitchCooperativeInput,
+  UpdateProfileInput,
 } from '@milvaloop/types';
 
 import { apiFetch } from '../api/api-fetch';
@@ -145,6 +147,25 @@ export function useResendVerificationMutation() {
 
 export function useChangePasswordMutation() {
   return useAuthActionMutation<ChangePasswordInput>('/auth/password/change');
+}
+
+// Patches the cached session's name directly rather than refetching —
+// every other page reading it (the sidebar, "who did this" labels once
+// they next load) picks up the change immediately, the same way
+// applyIssuedSession seeds the cache after login instead of waiting on a
+// refetch.
+export function useUpdateProfileMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      apiFetch<void>('/auth/profile', { method: 'PATCH', body: JSON.stringify(input) }),
+    onSuccess: (_data, input) => {
+      queryClient.setQueryData<CurrentSession>(CURRENT_SESSION_QUERY_KEY, (current) =>
+        current ? { ...current, user: { ...current.user, name: input.name } } : current,
+      );
+    },
+  });
 }
 
 export function useLogoutMutation() {

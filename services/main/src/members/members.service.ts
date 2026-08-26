@@ -75,6 +75,7 @@ export class MembersService {
       .select({
         membershipId: memberships.id,
         userId: memberships.userId,
+        name: users.name,
         email: users.email,
         permissions: memberships.permissions,
         joinedAt: memberships.createdAt,
@@ -90,6 +91,7 @@ export class MembersService {
       .select({
         membershipId: memberships.id,
         userId: memberships.userId,
+        name: users.name,
         email: users.email,
         permissions: memberships.permissions,
         joinedAt: memberships.createdAt,
@@ -127,6 +129,7 @@ export class MembersService {
           status: 'active' as const,
           membershipId: row.membershipId,
           userId: row.userId,
+          name: row.name,
           email: row.email,
           permissions: row.permissions,
           joinedAt: row.joinedAt.toISOString(),
@@ -145,6 +148,7 @@ export class MembersService {
           status: 'removed' as const,
           membershipId: row.membershipId,
           userId: row.userId,
+          name: row.name,
           email: row.email,
           permissions: row.permissions,
           joinedAt: row.joinedAt.toISOString(),
@@ -222,7 +226,7 @@ export class MembersService {
     const { html, text } = await renderEmail(
       InviteEmail({
         tenantName: tenant.name,
-        invitedByEmail: inviter.email,
+        invitedByName: inviter.name,
         acceptUrl,
       }),
     );
@@ -304,7 +308,11 @@ export class MembersService {
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [membership] = await tx
-        .select({ permissions: memberships.permissions, email: users.email })
+        .select({
+          permissions: memberships.permissions,
+          name: users.name,
+          email: users.email,
+        })
         .from(memberships)
         .innerJoin(users, eq(memberships.userId, users.id))
         .where(
@@ -338,6 +346,7 @@ export class MembersService {
         entityType: 'membership',
         entityId: membershipId,
         metadata: {
+          name: membership.name,
           email: membership.email,
           before: membership.permissions,
           after: nextPermissions,
@@ -365,6 +374,7 @@ export class MembersService {
         .select({
           userId: memberships.userId,
           remindersPausedAt: memberships.remindersPausedAt,
+          name: users.name,
           email: users.email,
         })
         .from(memberships)
@@ -402,7 +412,7 @@ export class MembersService {
         action: paused ? 'member.reminders_paused' : 'member.reminders_resumed',
         entityType: 'membership',
         entityId: membershipId,
-        metadata: { email: membership.email },
+        metadata: { name: membership.name, email: membership.email },
       });
     });
   }
@@ -419,9 +429,13 @@ export class MembersService {
     actorUserId: string,
     membershipId: string,
   ): Promise<void> {
-    const removedEmail = await this.db.transaction(async (tx) => {
+    const removed = await this.db.transaction(async (tx) => {
       const [membership] = await tx
-        .select({ permissions: memberships.permissions, email: users.email })
+        .select({
+          permissions: memberships.permissions,
+          name: users.name,
+          email: users.email,
+        })
         .from(memberships)
         .innerJoin(users, eq(memberships.userId, users.id))
         .where(
@@ -469,12 +483,13 @@ export class MembersService {
         entityType: 'membership',
         entityId: membershipId,
         metadata: {
+          name: membership.name,
           email: membership.email,
           permissions: membership.permissions,
         },
       });
 
-      return membership.email;
+      return membership;
     });
 
     // Side effect external to the database, after the transaction commits
@@ -493,21 +508,21 @@ export class MembersService {
       .limit(1);
     const { html, text } = await renderEmail(
       MemberRemovedEmail({
-        memberName: removedEmail,
+        memberName: removed.name,
         cooperativeName: tenant.name,
-        removedByEmail: actor.email,
+        removedByName: actor.name,
       }),
     );
     await this.mailer
       .send({
-        to: removedEmail,
+        to: removed.email,
         subject: `You've been removed from ${tenant.name} on MilvaLoop`,
         html,
         text,
       })
       .catch((error: unknown) => {
         this.logger.error(
-          `Failed to send removal email to ${removedEmail}`,
+          `Failed to send removal email to ${removed.email}`,
           error,
         );
       });
@@ -617,13 +632,19 @@ export class MembersService {
         .set({ consumedAt: new Date() })
         .where(eq(membershipInvites.id, invite.id));
 
+      const [joiningUser] = await tx
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, claims.sub))
+        .limit(1);
+
       await this.auditLog.record(tx, {
         tenantId: invite.tenantId,
         actorUserId: claims.sub,
         action: 'member.invite_accepted',
         entityType: 'membership_invite',
         entityId: invite.id,
-        metadata: { email: invite.email },
+        metadata: { name: joiningUser?.name, email: invite.email },
       });
     });
 
@@ -695,6 +716,7 @@ export class MembersService {
       const [targetUser] = await tx
         .insert(users)
         .values({
+          name: input.name,
           email: invite.email,
           passwordHash,
           emailVerifiedAt: new Date(),
@@ -727,7 +749,7 @@ export class MembersService {
         action: 'member.invite_accepted',
         entityType: 'membership_invite',
         entityId: invite.id,
-        metadata: { email: invite.email },
+        metadata: { name: targetUser.name, email: invite.email },
       });
 
       return targetUser;

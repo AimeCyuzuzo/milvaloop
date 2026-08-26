@@ -9,7 +9,7 @@ describe('auditEventSchema', () => {
     entityType: 'membership_invite',
     entityId: '22222222-2222-4222-8222-222222222222',
     metadata: { email: 'new-member@example.com' },
-    actor: { email: 'founder@example.com' },
+    actor: { name: 'Founder Person', email: 'founder@example.com' },
     createdAt: '2026-08-24T12:00:00.000Z',
   };
 

@@ -96,6 +96,7 @@ describe('Contributions (e2e)', () => {
 
   const FOUNDER = {
     tenantName: 'Contributions Test Coop',
+    name: 'Founder Person',
     email: 'founder@example.com',
     password: 'correct-horse-battery',
   };
@@ -154,7 +155,7 @@ describe('Contributions (e2e)', () => {
     const token = extractInviteToken(sentEmails, email);
     const response = await request(app.getHttpServer())
       .post('/members/invites/accept')
-      .send({ token, password: PASSWORD });
+      .send({ token, name: 'Invited Member', password: PASSWORD });
     return bodyAs<AuthSession>(response);
   }
 
@@ -792,7 +793,7 @@ describe('Contributions (e2e)', () => {
       const workbook = await loadWorkbook(response.body as Buffer);
       const sheet = workbook.getWorksheet('Contributions');
       expect(sheet?.getRow(1).getCell(1).value).toBe('Member');
-      expect(sheet?.getRow(2).getCell(1).value).toBe(founder.user.email);
+      expect(sheet?.getRow(2).getCell(1).value).toBe(founder.user.name);
       expect(sheet?.getRow(2).getCell(2).value).toBe(SHARE_PRICE);
       expect(sheet?.getRow(2).getCell(4).value).toBe('pending');
     });
@@ -832,8 +833,9 @@ describe('Contributions (e2e)', () => {
         'By member',
       ]);
       const membersSheet = workbook.getWorksheet('By member');
-      expect(membersSheet?.getRow(2).getCell(1).value).toBe(founder.user.email);
-      expect(membersSheet?.getRow(2).getCell(2).value).toBe(1);
+      expect(membersSheet?.getRow(2).getCell(1).value).toBe(founder.user.name);
+      expect(membersSheet?.getRow(2).getCell(2).value).toBe(founder.user.email);
+      expect(membersSheet?.getRow(2).getCell(3).value).toBe(1);
     });
   });
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { changePasswordSchema, type ChangePasswordInput } from '@milvaloop/types';
+import { changePasswordSchema, personNameSchema, type ChangePasswordInput } from '@milvaloop/types';
+import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
@@ -17,9 +18,79 @@ import { Typography } from '@milvaloop/ui/typography';
 
 import { getErrorMessage } from '@/lib/api/api-fetch';
 import { applyServerError } from '@/lib/forms/apply-server-error';
-import { useChangePasswordMutation } from '@/lib/auth/use-auth-mutations';
+import { useChangePasswordMutation, useUpdateProfileMutation } from '@/lib/auth/use-auth-mutations';
+import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 import { useUpdateReminderPauseMutation } from '@/lib/members/use-members-mutations';
 import { useMyMembership } from '@/lib/members/use-my-membership';
+
+const nameFormSchema = z.object({ name: personNameSchema });
+type NameFormValues = z.infer<typeof nameFormSchema>;
+
+function NameCard() {
+  const { data: session } = useCurrentSessionQuery();
+  const updateProfile = useUpdateProfileMutation();
+
+  const form = useForm<NameFormValues>({
+    resolver: zodResolver(nameFormSchema),
+    defaultValues: { name: '' },
+  });
+
+  // Resets whenever the session's name changes (including right after this
+  // form's own successful save) — react-hook-form's defaultValues only
+  // apply on mount, so a value known after that has to be pushed in
+  // explicitly.
+  useEffect(() => {
+    if (session) {
+      form.reset({ name: session.user.name });
+    }
+  }, [session, form]);
+
+  async function onSubmit(values: NameFormValues) {
+    try {
+      await updateProfile.mutateAsync(values);
+      toast.success('Name updated.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Your name</CardTitle>
+        <CardDescription>Shown to other members in place of your email.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!session ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="w-fit">
+                <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isDirty}>
+                  {form.formState.isSubmitting ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function AccountPage() {
   const changePassword = useChangePasswordMutation();
@@ -60,6 +131,8 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <NameCard />
+
       <Card>
         <CardHeader>
           <CardTitle>Change password</CardTitle>

@@ -13,7 +13,7 @@ export const auditEventSchema = z.object({
   entityType: z.string(),
   entityId: z.uuid().nullable(),
   metadata: z.record(z.string(), z.unknown()),
-  actor: z.object({ email: z.email() }).nullable(),
+  actor: z.object({ name: z.string(), email: z.email() }).nullable(),
   createdAt: z.iso.datetime(),
 });
 export type AuditEvent = z.infer<typeof auditEventSchema>;

@@ -20,14 +20,14 @@ export function RemoveMemberDialog({
 
   async function handleRemove() {
     await remove.mutateAsync(member.membershipId);
-    toast.success(`Removed ${member.email}.`);
+    toast.success(`Removed ${member.name}.`);
   }
 
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`Remove ${member.email}?`}
+      title={`Remove ${member.name} (${member.email})?`}
       description="They'll lose access to this cooperative immediately. This can only be undone by inviting them again."
       confirmLabel="Remove member"
       pendingLabel="Removing…"

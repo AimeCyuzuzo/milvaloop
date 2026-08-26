@@ -77,6 +77,7 @@ describe('Audit events (e2e)', () => {
       .post('/auth/signup')
       .send({
         tenantName: 'Audit Test Coop',
+        name: 'Founder Person',
         email: 'founder@example.com',
         password: PASSWORD,
         ...overrides,
@@ -95,7 +96,7 @@ describe('Audit events (e2e)', () => {
     const token = extractInviteToken(sentEmails, email);
     const response = await request(app.getHttpServer())
       .post('/members/invites/accept')
-      .send({ token, password: PASSWORD });
+      .send({ token, name: 'Invited Member', password: PASSWORD });
     return bodyAs<AuthSession>(response);
   }
 
@@ -190,12 +191,12 @@ describe('Audit events (e2e)', () => {
     expect(body.events[1]).toMatchObject({
       action: 'member.invited',
       entityType: 'membership_invite',
-      actor: { email: 'founder@example.com' },
+      actor: { name: 'Founder Person', email: 'founder@example.com' },
       metadata: { email: 'invitee@example.com', permissions: [] },
     });
   });
 
-  it("keeps a removed member's email on the removal event", async () => {
+  it("keeps a removed member's name and email on the removal event", async () => {
     const founder = await signupFounder();
     await inviteAndAccept(founder.accessToken, 'toremove@example.com');
     const membershipId = await membershipIdByEmail(
@@ -214,7 +215,7 @@ describe('Audit events (e2e)', () => {
     expect(removalEvent).toMatchObject({
       entityType: 'membership',
       entityId: membershipId,
-      metadata: { email: 'toremove@example.com' },
+      metadata: { name: 'Invited Member', email: 'toremove@example.com' },
     });
   });
 
@@ -266,6 +267,7 @@ describe('Audit events (e2e)', () => {
     expect(approvalEvent).toMatchObject({
       metadata: {
         membershipId: founderMembershipId,
+        name: 'Founder Person',
         email: 'founder@example.com',
         amount: SHARE_PRICE,
       },
