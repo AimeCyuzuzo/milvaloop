@@ -791,6 +791,32 @@ describe('Members (e2e)', () => {
       );
     });
 
+    it('emails the removed member, naming who removed them and the cooperative', async () => {
+      const founder = await signupFounder();
+      await inviteAndAccept(founder.accessToken, 'removeme2@example.com', []);
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const target = bodyAs<MemberListResponse>(list).members.find(
+        (m) => m.status === 'active' && m.email === 'removeme2@example.com',
+      );
+      if (!target || target.status !== 'active') {
+        throw new Error('Expected member not found');
+      }
+
+      await request(app.getHttpServer())
+        .delete(`/members/${target.membershipId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      // Both the invite and the removal email went to the same address —
+      // the invite arrived first, so the removal is the latest one.
+      const removalEmail = [...sentEmails]
+        .reverse()
+        .find((email) => email.to === 'removeme2@example.com');
+      expect(removalEmail?.subject).toContain('removed from');
+      expect(removalEmail?.html).toContain(FOUNDER.email);
+    });
+
     it('blocks removing the only remaining admin', async () => {
       const founder = await signupFounder();
       const list = await request(app.getHttpServer())

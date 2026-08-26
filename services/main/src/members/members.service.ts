@@ -16,7 +16,12 @@ import {
   schema,
   type Database,
 } from '@milvaloop/db';
-import { InviteEmail, renderEmail, type Mailer } from '@milvaloop/email';
+import {
+  InviteEmail,
+  MemberRemovedEmail,
+  renderEmail,
+  type Mailer,
+} from '@milvaloop/email';
 import {
   PERMISSIONS,
   type AcceptInviteInput,
@@ -406,13 +411,15 @@ export class MembersService {
   // removing the tenant's only remaining TENANT_ADMIN, the same failure
   // mode a permissions edit can't cause (see updatePermissions) but a
   // removal genuinely can, since it drops every permission the membership
-  // held, admin included.
+  // held, admin included. Notifies the removed member by email — losing
+  // access to a cooperative shouldn't be silent, the same reasoning that
+  // makes an invite email non-optional.
   async remove(
     tenantId: string,
     actorUserId: string,
     membershipId: string,
   ): Promise<void> {
-    await this.db.transaction(async (tx) => {
+    const removedEmail = await this.db.transaction(async (tx) => {
       const [membership] = await tx
         .select({ permissions: memberships.permissions, email: users.email })
         .from(memberships)
@@ -466,7 +473,45 @@ export class MembersService {
           permissions: membership.permissions,
         },
       });
+
+      return membership.email;
     });
+
+    // Side effect external to the database, after the transaction commits
+    // (see CODE_QUALITY.md) — a send failure here shouldn't undo a removal
+    // that already took effect, so it's only logged, not surfaced back to
+    // the actor (same reasoning as invite()'s email).
+    const [tenant] = await this.db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    const [actor] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, actorUserId))
+      .limit(1);
+    const { html, text } = await renderEmail(
+      MemberRemovedEmail({
+        memberName: removedEmail,
+        cooperativeName: tenant.name,
+        removedByEmail: actor.email,
+        loginUrl: `${env.WEB_ORIGIN}/auth/login`,
+      }),
+    );
+    await this.mailer
+      .send({
+        to: removedEmail,
+        subject: `You've been removed from ${tenant.name} on MilvaLoop`,
+        html,
+        text,
+      })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to send removal email to ${removedEmail}`,
+          error,
+        );
+      });
   }
 
   // Read-only, never consumes the invite — safe to call on every page
