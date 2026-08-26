@@ -496,7 +496,6 @@ export class MembersService {
         memberName: removedEmail,
         cooperativeName: tenant.name,
         removedByEmail: actor.email,
-        loginUrl: `${env.WEB_ORIGIN}/auth/login`,
       }),
     );
     await this.mailer
