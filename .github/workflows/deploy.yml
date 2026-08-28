@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, milvaproducts]
     # Scopes PRODUCTION_ENV to this job and, if configured in this repo's
     # Settings → Environments, lets a deploy require manual approval or
     # restrict which branch can trigger it — protection a plain repo
