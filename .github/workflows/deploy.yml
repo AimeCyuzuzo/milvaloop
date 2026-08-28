@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, milvaproducts]
     # Scopes PRODUCTION_ENV to this job and, if configured in this repo's
     # Settings → Environments, lets a deploy require manual approval or
     # restrict which branch can trigger it — protection a plain repo
@@ -36,9 +36,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's own "packageManager" field
+      # (pnpm@9.0.0) — pnpm/action-setup now refuses to start if a version
+      # is also given here, treating the two as a conflict rather than
+      # redundant agreement.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
