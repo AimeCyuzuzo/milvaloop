@@ -19,6 +19,7 @@ import {
   type AnalyticsMemberRow,
   type AnalyticsPeriodRow,
   type AnalyticsResponse,
+  type ApproveAllPendingResponse,
   type ComplianceSummary,
   type ContributionListItem,
   type ContributionListQuery,
@@ -29,13 +30,16 @@ import {
   type PreviewAllocationInput,
   type PreviewAllocationResponse,
   type RecordContributionInput,
+  type RecordHistoricalBatchInput,
+  type RecordHistoricalBatchResponse,
   type SetSharePriceInput,
   type ShareSettingsResponse,
   type SharePrice,
+  type UpdateSharePriceInput,
 } from '@milvaloop/types';
 
 import { AuditLogService } from '../audit/audit-log.service';
-import { isUniqueViolation } from '../common/db-errors';
+import { isForeignKeyViolation, isUniqueViolation } from '../common/db-errors';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import type { Transaction } from '../db/types';
@@ -130,10 +134,12 @@ export class ContributionsService {
 
   async getSettings(tenantId: string): Promise<ShareSettingsResponse> {
     const rows = await this.loadSharePrices(this.db, tenantId);
+    const usedPriceIds = await this.loadUsedSharePriceIds(this.db, tenantId);
     const history: SharePrice[] = rows.map((row) => ({
       id: row.id,
       amount: row.amount,
       effectiveFrom: row.effectiveFrom,
+      usedByContributions: usedPriceIds.has(row.id),
     }));
     const current = history.length > 0 ? history[history.length - 1] : null;
     return { current: current ?? null, history };
@@ -179,6 +185,9 @@ export class ContributionsService {
           id: row.id,
           amount: row.amount,
           effectiveFrom: row.effectiveFrom,
+          // A brand-new price point, just inserted — nothing can have
+          // pinned to it yet.
+          usedByContributions: false,
         };
       });
     } catch (error) {
@@ -191,6 +200,133 @@ export class ContributionsService {
       }
       throw error;
     }
+  }
+
+  // The database itself is the real guard here — sharePrices'
+  // contribution_allocations.share_price_id FK is declared `onDelete:
+  // 'restrict'` (see contribution-allocations.ts), so a price any
+  // contribution already used simply can't be deleted. This only ever
+  // translates that failure into a clear message; it doesn't duplicate
+  // the check itself, the same way isUniqueViolation callers elsewhere in
+  // this codebase never re-check a unique constraint by hand first.
+  async deleteSharePrice(
+    tenantId: string,
+    actorUserId: string,
+    priceId: string,
+  ): Promise<void> {
+    try {
+      await this.db.transaction(async (tx) => {
+        const [deleted] = await tx
+          .delete(sharePrices)
+          .where(
+            and(
+              eq(sharePrices.id, priceId),
+              eq(sharePrices.tenantId, tenantId),
+            ),
+          )
+          .returning();
+        if (!deleted) {
+          throw new NotFoundException('No share price found');
+        }
+
+        await this.auditLog.record(tx, {
+          tenantId,
+          actorUserId,
+          action: 'contribution.share_price_removed',
+          entityType: 'share_price',
+          entityId: priceId,
+          metadata: {
+            amount: deleted.amount,
+            effectiveFrom: deleted.effectiveFrom,
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        isForeignKeyViolation(
+          error,
+          'contribution_allocations_share_price_id_share_prices_id_fk',
+        )
+      ) {
+        throw new ConflictException(
+          "This price is already used by a recorded contribution and can't be removed",
+        );
+      }
+      throw error;
+    }
+  }
+
+  // Corrects an existing price point's amount in place — unlike
+  // setSharePrice, which only ever adds a new one effective going forward.
+  // A period's due amount is read live from its pinned share_prices row
+  // (see contribution-allocations.ts), so this can retroactively change
+  // what an already-approved contribution's period shows as due, or
+  // satisfied; `usedByContributions` on the response is what lets the
+  // frontend warn about that before the edit is made, not a block — a
+  // genuine data-entry correction (the price was 500,000 instead of
+  // 50,000) must stay possible even after contributions exist against it.
+  async updateSharePrice(
+    tenantId: string,
+    actorUserId: string,
+    priceId: string,
+    input: UpdateSharePriceInput,
+  ): Promise<SharePrice> {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(sharePrices)
+        .where(
+          and(eq(sharePrices.id, priceId), eq(sharePrices.tenantId, tenantId)),
+        )
+        .limit(1);
+      if (!existing) {
+        throw new NotFoundException('No share price found');
+      }
+
+      const usedByContributions = await this.isSharePriceUsed(
+        tx,
+        tenantId,
+        priceId,
+      );
+
+      if (input.amount === existing.amount) {
+        return {
+          id: existing.id,
+          amount: existing.amount,
+          effectiveFrom: existing.effectiveFrom,
+          usedByContributions,
+        };
+      }
+
+      const [updated] = await tx
+        .update(sharePrices)
+        .set({ amount: input.amount })
+        .where(
+          and(eq(sharePrices.id, priceId), eq(sharePrices.tenantId, tenantId)),
+        )
+        .returning();
+
+      await this.auditLog.record(tx, {
+        tenantId,
+        actorUserId,
+        action: 'contribution.share_price_amount_edited',
+        entityType: 'share_price',
+        entityId: priceId,
+        metadata: {
+          previousAmount: existing.amount,
+          amount: updated.amount,
+          effectiveFrom: updated.effectiveFrom,
+          affectedExistingContributions: usedByContributions,
+        },
+      });
+
+      return {
+        id: updated.id,
+        amount: updated.amount,
+        effectiveFrom: updated.effectiveFrom,
+        usedByContributions,
+      };
+    });
   }
 
   async previewAllocation(
@@ -358,6 +494,114 @@ export class ContributionsService {
     await this.sendPendingApprovalEmail(tenantId, contribution);
   }
 
+  // The historical-entry grid's submission — one contribution per member
+  // with at least one filled cell, its allocations the grid's cells
+  // directly rather than a waterfall proposal (historical entry states
+  // what already happened, it doesn't propose how new money should
+  // apply). `amount` is derived as the sum of each entry's own
+  // allocations rather than repeated on the input, so there's no
+  // sum-must-match check to run — it can't disagree with itself. The
+  // whole batch is one transaction: a bad row (an inactive member, a
+  // period with no share price yet) throws and rolls back everything,
+  // never leaving a partially-imported batch to sort out.
+  //
+  // No pending-approval email is sent per entry — the person running an
+  // import is about to approve the whole batch themselves in the same
+  // sitting (see approveAllPending), and a real cooperative's history can
+  // span dozens of members; one email per member here would be noise, not
+  // the normal one-payment notification this email exists for.
+  async recordHistoricalBatch(
+    tenantId: string,
+    recordedByUserId: string,
+    input: RecordHistoricalBatchInput,
+  ): Promise<RecordHistoricalBatchResponse> {
+    const contributionIds = await this.db.transaction(async (tx) => {
+      const recordedByMembershipId = await this.resolveActiveMembershipId(
+        tx,
+        tenantId,
+        recordedByUserId,
+      );
+      const sharePriceRows = await this.loadSharePrices(tx, tenantId);
+      if (sharePriceRows.length === 0) {
+        throw new BadRequestException(
+          'Contributions have not been set up for this cooperative yet',
+        );
+      }
+
+      const ids: string[] = [];
+      for (const entry of input.entries) {
+        const [member] = await tx
+          .select({ name: users.name, email: users.email })
+          .from(memberships)
+          .innerJoin(users, eq(memberships.userId, users.id))
+          .where(
+            and(
+              eq(memberships.id, entry.membershipId),
+              eq(memberships.tenantId, tenantId),
+              isNull(memberships.removedAt),
+            ),
+          )
+          .limit(1);
+        if (!member) {
+          throw new NotFoundException('No active member found');
+        }
+
+        const amount = entry.allocations.reduce(
+          (total, line) => total + line.amount,
+          0,
+        );
+
+        const [contribution] = await tx
+          .insert(contributions)
+          .values({
+            tenantId,
+            membershipId: entry.membershipId,
+            amount,
+            contributedAt: new Date(entry.contributedAt),
+            recordedByMembershipId,
+          })
+          .returning();
+
+        for (const line of entry.allocations) {
+          const sharePriceId = await this.resolveSharePriceIdForPeriod(
+            tx,
+            entry.membershipId,
+            line.period,
+            sharePriceRows,
+          );
+          await tx.insert(contributionAllocations).values({
+            tenantId,
+            contributionId: contribution.id,
+            period: line.period,
+            amount: line.amount,
+            sharePriceId,
+          });
+        }
+
+        await this.auditLog.record(tx, {
+          tenantId,
+          actorUserId: recordedByUserId,
+          action: 'contribution.recorded',
+          entityType: 'contribution',
+          entityId: contribution.id,
+          metadata: {
+            membershipId: entry.membershipId,
+            name: member.name,
+            email: member.email,
+            amount,
+            allocations: entry.allocations,
+            historical: true,
+          },
+        });
+
+        ids.push(contribution.id);
+      }
+      return ids;
+    });
+
+    return { contributionIds };
+  }
+
   async approveContribution(
     tenantId: string,
     approverUserId: string,
@@ -412,6 +656,45 @@ export class ContributionsService {
     });
 
     await this.sendApprovedEmail(tenantId, approved);
+  }
+
+  // A convenience over calling approveContribution once per row after a
+  // large import — each pending contribution is approved independently
+  // under the exact same self-approval rule (assertCanApprove, via
+  // approveContribution itself, reused rather than duplicated), so one
+  // that fails it is reported, not silently skipped or allowed to block
+  // the rest.
+  async approveAllPending(
+    tenantId: string,
+    approverUserId: string,
+  ): Promise<ApproveAllPendingResponse> {
+    const pending = await this.db
+      .select({ id: contributions.id })
+      .from(contributions)
+      .where(
+        and(
+          eq(contributions.tenantId, tenantId),
+          eq(contributions.status, 'pending'),
+        ),
+      );
+
+    const approved: string[] = [];
+    const failed: Array<{ id: string; reason: string }> = [];
+    for (const row of pending) {
+      try {
+        await this.approveContribution(tenantId, approverUserId, row.id);
+        approved.push(row.id);
+      } catch (error) {
+        failed.push({
+          id: row.id,
+          reason:
+            error instanceof Error
+              ? error.message
+              : 'Could not approve this contribution',
+        });
+      }
+    }
+    return { approved, failed };
   }
 
   async rejectContribution(
@@ -512,7 +795,6 @@ export class ContributionsService {
       sharePriceRows,
     );
     const costBasis = await this.sumApprovedContributions(membershipId);
-    const latestPrice = sharePriceRows[sharePriceRows.length - 1];
     const totalShares = this.sumSharesOwned(periods);
     const periodStatuses: PeriodStatus[] = periods.map((period) => ({
       period: period.period,
@@ -525,7 +807,6 @@ export class ContributionsService {
       membershipId,
       totalShares,
       costBasis,
-      currentValue: latestPrice ? totalShares * latestPrice.amount : 0,
       periods: periodStatuses,
     };
   }
@@ -620,10 +901,10 @@ export class ContributionsService {
       email: membersById.get(snapshot.membershipId)?.email ?? '',
       totalShares: snapshot.totalShares,
       costBasis: snapshot.costBasis,
-      currentValue: snapshot.currentValue,
       currentPeriodStatus:
         snapshot.periods.find((period) => period.period === current)?.status ??
         null,
+      periods: snapshot.periods,
     }));
 
     return {
@@ -636,10 +917,6 @@ export class ContributionsService {
         ),
         totalCostBasis: members.reduce(
           (total, member) => total + member.costBasis,
-          0,
-        ),
-        totalCurrentValue: members.reduce(
-          (total, member) => total + member.currentValue,
           0,
         ),
         totalPendingAmount,
@@ -677,10 +954,6 @@ export class ContributionsService {
           value: analytics.totals.totalCostBasis,
         },
         {
-          metric: "Total value at today's price (RWF)",
-          value: analytics.totals.totalCurrentValue,
-        },
-        {
           metric: 'Pending approval (RWF)',
           value: analytics.totals.totalPendingAmount,
         },
@@ -709,7 +982,6 @@ export class ContributionsService {
         { header: 'Email', key: 'email', width: 28 },
         { header: 'Shares owned', key: 'totalShares' },
         { header: 'Total contributed (RWF)', key: 'costBasis' },
-        { header: "Value at today's price (RWF)", key: 'currentValue' },
         { header: 'Current period status', key: 'currentPeriodStatus' },
       ],
       rows: analytics.members.map((member) => ({
@@ -717,7 +989,6 @@ export class ContributionsService {
         email: member.email,
         totalShares: member.totalShares,
         costBasis: member.costBasis,
-        currentValue: member.currentValue,
         currentPeriodStatus: member.currentPeriodStatus,
       })),
     };
@@ -946,6 +1217,38 @@ export class ContributionsService {
         effectiveFrom: row.effectiveFrom,
       }))
       .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  }
+
+  // Every share_price id that at least one contribution allocation is
+  // pinned to, across the whole tenant — one query for the settings list
+  // rather than one existence check per row.
+  private async loadUsedSharePriceIds(
+    executor: Database | Transaction,
+    tenantId: string,
+  ): Promise<Set<string>> {
+    const rows = await executor
+      .select({ sharePriceId: contributionAllocations.sharePriceId })
+      .from(contributionAllocations)
+      .where(eq(contributionAllocations.tenantId, tenantId));
+    return new Set(rows.map((row) => row.sharePriceId));
+  }
+
+  private async isSharePriceUsed(
+    executor: Database | Transaction,
+    tenantId: string,
+    priceId: string,
+  ): Promise<boolean> {
+    const [row] = await executor
+      .select({ id: contributionAllocations.id })
+      .from(contributionAllocations)
+      .where(
+        and(
+          eq(contributionAllocations.tenantId, tenantId),
+          eq(contributionAllocations.sharePriceId, priceId),
+        ),
+      )
+      .limit(1);
+    return !!row;
   }
 
   private async resolveActiveMembershipId(
@@ -1187,7 +1490,7 @@ export class ContributionsService {
     sharePriceRows: SharePriceRow[],
   ): Promise<ComputedPeriod[]> {
     const [membership] = await this.db
-      .select({ createdAt: memberships.createdAt })
+      .select({ memberSince: memberships.memberSince })
       .from(memberships)
       .where(
         and(
@@ -1200,7 +1503,13 @@ export class ContributionsService {
       throw new NotFoundException('No active member found');
     }
 
-    const membershipStartPeriod = truncateToMonth(membership.createdAt);
+    // Anchored on memberSince, not the membership row's own createdAt —
+    // see memberships.ts's comment: a member backfilled from before they
+    // joined MilvaLoop can have obligations that start earlier than the
+    // row itself does.
+    const membershipStartPeriod = truncateToMonth(
+      new Date(membership.memberSince),
+    );
     const firstPricePeriod = truncateToMonth(
       new Date(sharePriceRows[0].effectiveFrom),
     );

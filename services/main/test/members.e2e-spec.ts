@@ -8,10 +8,14 @@ import {
 } from '@milvaloop/db/testing';
 import type {
   AuthSession,
+  InviteLookupResult,
+  MemberImportPreview,
+  MemberImportResult,
   MemberListResponse,
   PendingInvite,
 } from '@milvaloop/types';
 import cookieParser from 'cookie-parser';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 
@@ -29,6 +33,20 @@ import { createFakeMailer } from './fakes/fake-mailer';
 
 function bodyAs<T>(response: request.Response): T {
   return response.body as T;
+}
+
+async function buildMemberSheet(
+  headers: string[],
+  rows: string[][],
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Members');
+  sheet.addRow(headers);
+  for (const row of rows) {
+    sheet.addRow(row);
+  }
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // Invite emails link to the accept page with the raw token in the query
@@ -367,6 +385,8 @@ describe('Members (e2e)', () => {
         email: 'lookup-new@example.com',
         tenantName: FOUNDER.tenantName,
         hasAccount: false,
+        isClaim: false,
+        claimName: null,
       });
     });
 
@@ -844,6 +864,242 @@ describe('Members (e2e)', () => {
         .delete('/members/00000000-0000-4000-8000-000000000000')
         .set('Authorization', `Bearer ${founder.accessToken}`);
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('POST /members/placeholder', () => {
+    it('adds a member with no login, backdated to a real join date', async () => {
+      const founder = await signupFounder();
+
+      const response = await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ name: 'Beata Uwase', memberSince: '2023-01-01' });
+      expect(response.status).toBe(201);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          status: 'active',
+          name: 'Beata Uwase',
+          hasLogin: false,
+          memberSince: '2023-01-01',
+        }),
+      );
+    });
+
+    it('rejects an empty name', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ name: '', memberSince: '2023-01-01' });
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe("claiming a placeholder member's login", () => {
+    async function addPlaceholder(
+      founderAccessToken: string,
+      name: string,
+    ): Promise<string> {
+      await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founderAccessToken}`)
+        .send({ name, memberSince: '2023-01-01' });
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founderAccessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      const placeholder = members.find(
+        (member) => member.status === 'active' && member.name === name,
+      );
+      if (!placeholder || placeholder.status !== 'active') {
+        throw new Error('Placeholder member was not created');
+      }
+      return placeholder.membershipId;
+    }
+
+    it('lets the claimant set a name and password without disturbing their membership', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'Beata Uwase',
+      );
+
+      const inviteResponse = await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'beata@example.com' });
+      expect(inviteResponse.status).toBe(201);
+
+      const token = extractInviteToken(sentEmails, 'beata@example.com');
+      const lookup = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token });
+      expect(bodyAs<InviteLookupResult>(lookup)).toMatchObject({
+        status: 'pending',
+        isClaim: true,
+        claimName: 'Beata Uwase',
+      });
+
+      const acceptResponse = await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'Beata M. Uwase', password: PASSWORD });
+      expect(acceptResponse.status).toBe(200);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          membershipId,
+          name: 'Beata M. Uwase',
+          email: 'beata@example.com',
+          hasLogin: true,
+          memberSince: '2023-01-01',
+        }),
+      );
+    });
+
+    it('rejects a second login invite for an already-claimed member', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'David Removed',
+      );
+      await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'david@example.com' });
+      const token = extractInviteToken(sentEmails, 'david@example.com');
+      await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'David Removed', password: PASSWORD });
+
+      const response = await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'david-again@example.com' });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects claiming into an email that already has a MilvaLoop account', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'Chantal Admin',
+      );
+      await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: FOUNDER.email });
+
+      const token = extractInviteToken(sentEmails, FOUNDER.email);
+      const response = await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'Chantal Admin', password: PASSWORD });
+      expect(response.status).toBe(409);
+    });
+  });
+
+  describe('POST /members/import', () => {
+    it("previews a spreadsheet's columns and a sample of its rows", async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['First', 'Last', 'Email'],
+        [['Aime', 'Cyuzuzo', 'aime@example.com']],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import/preview')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      const preview = bodyAs<MemberImportPreview>(response);
+      expect(preview.columns).toEqual(['First', 'Last', 'Email']);
+      expect(preview.sampleRows).toEqual([
+        ['Aime', 'Cyuzuzo', 'aime@example.com'],
+      ]);
+    });
+
+    it('invites rows with an email, adds rows without one, and skips a row with no name', async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['Name', 'Email'],
+        [
+          ['Aime Cyuzuzo', 'aime@example.com'],
+          ['Beata Uwase', ''],
+          ['', ''],
+        ],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .field(
+          'mapping',
+          JSON.stringify({
+            nameColumns: [0],
+            emailColumn: 1,
+            memberSince: '2023-01-01',
+          }),
+        )
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      const { rows } = bodyAs<MemberImportResult>(response);
+      expect(rows).toEqual([
+        {
+          outcome: 'invited',
+          row: 2,
+          name: 'Aime Cyuzuzo',
+          email: 'aime@example.com',
+        },
+        { outcome: 'added', row: 3, name: 'Beata Uwase' },
+        { outcome: 'skipped', row: 4, reason: 'No name found in this row' },
+      ]);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          status: 'invited',
+          email: 'aime@example.com',
+        }),
+      );
+      expect(members).toContainEqual(
+        expect.objectContaining({ name: 'Beata Uwase', hasLogin: false }),
+      );
+    });
+
+    it('combines two name columns with a space', async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['First', 'Last'],
+        [['Aime', 'Cyuzuzo']],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .field(
+          'mapping',
+          JSON.stringify({ nameColumns: [0, 1], memberSince: '2023-01-01' }),
+        )
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      expect(bodyAs<MemberImportResult>(response).rows).toEqual([
+        { outcome: 'added', row: 2, name: 'Aime Cyuzuzo' },
+      ]);
     });
   });
 });

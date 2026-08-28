@@ -102,17 +102,16 @@ describe('Contribution reminders (e2e)', () => {
       .send({ amount, effectiveFrom });
   }
 
-  // getPeriodsThrough clamps its start to the *later* of (membership
-  // joined, first share price) — a member never owes dues for a period
-  // before they joined. A signup's membership is always created "now," so
-  // testing an overdue period genuinely in the past means backdating the
-  // membership itself, not just the share price — there's no product-level
-  // way to do this (a membership's join date isn't editable), so this goes
-  // straight at the test database.
+  // getPeriodsThrough clamps its start to the *later* of (memberSince,
+  // first share price) — a member never owes dues for a period before
+  // they joined. A signup's membership always has memberSince "today," so
+  // testing an overdue period genuinely in the past means backdating it —
+  // a real membership only ever gets this from a placeholder/import flow,
+  // not a generic edit, so this goes straight at the test database.
   async function backdateMembership(membershipId: string, createdAt: Date) {
     await testDb.db
       .update(memberships)
-      .set({ createdAt })
+      .set({ createdAt, memberSince: createdAt.toISOString().slice(0, 10) })
       .where(eq(memberships.id, membershipId));
   }
 

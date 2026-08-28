@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -17,16 +19,22 @@ import {
   membershipIdParamSchema,
   previewAllocationSchema,
   recordContributionSchema,
+  recordHistoricalBatchSchema,
   rejectContributionSchema,
   setSharePriceSchema,
+  sharePriceIdParamSchema,
+  updateSharePriceSchema,
   PERMISSIONS,
   type ContributionIdParam,
   type ContributionListQuery,
   type MembershipIdParam,
   type PreviewAllocationInput,
   type RecordContributionInput,
+  type RecordHistoricalBatchInput,
   type RejectContributionInput,
   type SetSharePriceInput,
+  type SharePriceIdParam,
+  type UpdateSharePriceInput,
 } from '@milvaloop/types';
 import type { Response } from 'express';
 
@@ -144,6 +152,40 @@ export class ContributionsController {
     );
   }
 
+  @Patch('settings/:id')
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_SETTINGS)
+  async updateSharePrice(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(sharePriceIdParamSchema))
+    params: SharePriceIdParam,
+    @Body(new ZodValidationPipe(updateSharePriceSchema))
+    body: UpdateSharePriceInput,
+  ) {
+    return this.contributionsService.updateSharePrice(
+      claims.tenantId,
+      claims.sub,
+      params.id,
+      body,
+    );
+  }
+
+  @Delete('settings/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_SETTINGS)
+  async deleteSharePrice(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(sharePriceIdParamSchema))
+    params: SharePriceIdParam,
+  ) {
+    await this.contributionsService.deleteSharePrice(
+      claims.tenantId,
+      claims.sub,
+      params.id,
+    );
+  }
+
   // Every active member may preview/record a contribution for themselves —
   // no permission needed for that. Recording for someone else still needs
   // CONTRIBUTIONS_RECORD (or TENANT_ADMIN); that's a per-target decision
@@ -186,6 +228,26 @@ export class ContributionsController {
     );
   }
 
+  // The historical-entry grid's submission — always an explicit admin
+  // action on behalf of others, never a "record my own" self-service call
+  // like the plain POST above, so it's gated on the permission rather than
+  // left to the service's per-target check.
+  @Post('import')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_RECORD)
+  async recordHistoricalBatch(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Body(new ZodValidationPipe(recordHistoricalBatchSchema))
+    body: RecordHistoricalBatchInput,
+  ) {
+    return this.contributionsService.recordHistoricalBatch(
+      claims.tenantId,
+      claims.sub,
+      body,
+    );
+  }
+
   @Post(':id/approve')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AccessTokenGuard, PermissionsGuard)
@@ -199,6 +261,19 @@ export class ContributionsController {
       claims.tenantId,
       claims.sub,
       params.id,
+    );
+  }
+
+  // A convenience over approving one at a time after a large import — see
+  // ContributionsService.approveAllPending.
+  @Post('approve-all-pending')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_APPROVE)
+  async approveAllPending(@CurrentUser() claims: AccessTokenClaims) {
+    return this.contributionsService.approveAllPending(
+      claims.tenantId,
+      claims.sub,
     );
   }
 

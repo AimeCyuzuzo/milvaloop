@@ -301,6 +301,248 @@ describe('Contributions (e2e)', () => {
     });
   });
 
+  describe('PATCH /contributions/settings/:id', () => {
+    it("corrects an unused price's amount in place", async () => {
+      const founder = await signupFounder();
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+
+      const response = await request(app.getHttpServer())
+        .patch(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ amount: 60_000 });
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        id: priceId,
+        amount: 60_000,
+        usedByContributions: false,
+      });
+
+      const settings = await request(app.getHttpServer())
+        .get('/contributions/settings')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(bodyAs<ShareSettingsResponse>(settings).current).toMatchObject({
+        amount: 60_000,
+      });
+    });
+
+    it('flags usedByContributions once a contribution is recorded against a price, even before it is approved', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+
+      const settings = await request(app.getHttpServer())
+        .get('/contributions/settings')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(bodyAs<ShareSettingsResponse>(settings).current).toMatchObject({
+        usedByContributions: true,
+      });
+    });
+
+    it('retroactively changes what an already-approved contribution shows as due for that period', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const before = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const periodBefore = bodyAs<{
+        periods: Array<{ period: string; dueAmount: number; status: string }>;
+      }>(before).periods.find((p) => p.period === currentPeriod());
+      expect(periodBefore).toMatchObject({
+        dueAmount: SHARE_PRICE,
+        status: 'satisfied',
+      });
+
+      const patch = await request(app.getHttpServer())
+        .patch(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ amount: SHARE_PRICE * 2 });
+      expect(patch.status).toBe(200);
+
+      const after = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const periodAfter = bodyAs<{
+        periods: Array<{ period: string; dueAmount: number; status: string }>;
+      }>(after).periods.find((p) => p.period === currentPeriod());
+      expect(periodAfter).toMatchObject({
+        dueAmount: SHARE_PRICE * 2,
+        status: 'partial',
+      });
+    });
+
+    it('rejects a zero or negative amount', async () => {
+      const founder = await signupFounder();
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+
+      const response = await request(app.getHttpServer())
+        .patch(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ amount: 0 });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects a member without contributions:settings', async () => {
+      const founder = await signupFounder();
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'no-settings@example.com',
+        [],
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ amount: 60_000 });
+      expect(response.status).toBe(403);
+    });
+
+    it("returns 404 for another tenant's price", async () => {
+      const founderA = await signupFounder();
+      const created = await setSharePrice(
+        founderA.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      const founderB = await signupFounder({
+        email: 'founder-b@example.com',
+        tenantName: 'Second Coop',
+      });
+
+      const response = await request(app.getHttpServer())
+        .patch(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founderB.accessToken}`)
+        .send({ amount: 60_000 });
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /contributions/settings/:id', () => {
+    it('removes a price nothing has used yet', async () => {
+      const founder = await signupFounder();
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+
+      const response = await request(app.getHttpServer())
+        .delete(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(204);
+
+      const settings = await request(app.getHttpServer())
+        .get('/contributions/settings')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(bodyAs<ShareSettingsResponse>(settings).current).toBeNull();
+    });
+
+    it('refuses to remove a price a contribution has already used', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+
+      const response = await request(app.getHttpServer())
+        .delete(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(409);
+
+      const settings = await request(app.getHttpServer())
+        .get('/contributions/settings')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(bodyAs<ShareSettingsResponse>(settings).current).toMatchObject({
+        amount: SHARE_PRICE,
+      });
+    });
+
+    it('rejects a member without contributions:settings', async () => {
+      const founder = await signupFounder();
+      const created = await setSharePrice(
+        founder.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'no-settings@example.com',
+        [],
+      );
+
+      const response = await request(app.getHttpServer())
+        .delete(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`);
+      expect(response.status).toBe(403);
+    });
+
+    it("returns 404 for another tenant's price", async () => {
+      const founderA = await signupFounder();
+      const created = await setSharePrice(
+        founderA.accessToken,
+        SHARE_PRICE,
+        currentPeriod(),
+      );
+      const priceId = bodyAs<{ id: string }>(created).id;
+      const founderB = await signupFounder({
+        email: 'founder-b@example.com',
+        tenantName: 'Second Coop',
+      });
+
+      const response = await request(app.getHttpServer())
+        .delete(`/contributions/settings/${priceId}`)
+        .set('Authorization', `Bearer ${founderB.accessToken}`);
+      expect(response.status).toBe(404);
+    });
+  });
+
   describe('POST /contributions/preview', () => {
     it('rejects a preview before the cooperative has a share price set', async () => {
       const founder = await signupFounder();
@@ -512,6 +754,147 @@ describe('Contributions (e2e)', () => {
     });
   });
 
+  describe('POST /contributions/import', () => {
+    it('records one contribution per member from the grid, pending approval', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, '2023-01-01');
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          entries: [
+            {
+              membershipId: founderMembershipId,
+              contributedAt: '2023-02-01',
+              allocations: [
+                { period: '2023-01-01', amount: SHARE_PRICE },
+                { period: '2023-02-01', amount: SHARE_PRICE },
+              ],
+            },
+          ],
+        });
+      expect(response.status).toBe(201);
+      expect(
+        bodyAs<{ contributionIds: string[] }>(response).contributionIds,
+      ).toHaveLength(1);
+
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { contributions } = bodyAs<{
+        contributions: Array<{ status: string; amount: number }>;
+      }>(list);
+      expect(contributions).toEqual([
+        expect.objectContaining({ status: 'pending', amount: SHARE_PRICE * 2 }),
+      ]);
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      // Still pending — recordHistoricalBatch never auto-approves, same
+      // rule as a single recorded contribution.
+      expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(0);
+    });
+
+    it('rolls back the whole batch if any entry fails, rather than partially importing', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, '2023-01-01');
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          entries: [
+            {
+              membershipId: founderMembershipId,
+              contributedAt: '2023-01-01',
+              allocations: [{ period: '2023-01-01', amount: SHARE_PRICE }],
+            },
+            {
+              membershipId: '00000000-0000-4000-8000-000000000000',
+              contributedAt: '2023-01-01',
+              allocations: [{ period: '2023-01-01', amount: SHARE_PRICE }],
+            },
+          ],
+        });
+      expect(response.status).toBe(404);
+
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(
+        bodyAs<{ contributions: unknown[] }>(list).contributions,
+      ).toHaveLength(0);
+    });
+  });
+
+  describe('POST /contributions/approve-all-pending', () => {
+    it('approves every pending contribution the caller is allowed to approve', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+
+      await request(app.getHttpServer())
+        .post('/contributions/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          entries: [
+            {
+              membershipId: founderMembershipId,
+              contributedAt: currentPeriod(),
+              allocations: [{ period: currentPeriod(), amount: SHARE_PRICE }],
+            },
+          ],
+        });
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/approve-all-pending')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(200);
+      const { approved, failed } = bodyAs<{
+        approved: string[];
+        failed: unknown[];
+      }>(response);
+      expect(approved).toHaveLength(1);
+      expect(failed).toEqual([]);
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(
+        SHARE_PRICE,
+      );
+    });
+
+    it('reports, rather than blocks on, a contribution the caller cannot approve', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await inviteAndAccept(founder.accessToken, 'approver3@example.com', [
+        'contributions:approve',
+      ]);
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/approve-all-pending')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(200);
+      const { approved, failed } = bodyAs<{
+        approved: unknown[];
+        failed: Array<{ id: string }>;
+      }>(response);
+      expect(approved).toEqual([]);
+      expect(failed).toHaveLength(1);
+    });
+  });
+
   describe('pending-approval notifications', () => {
     it('emails eligible approvers, excluding the recorder, when a contribution is recorded', async () => {
       const founder = await signupFounder();
@@ -704,7 +1087,6 @@ describe('Contributions (e2e)', () => {
           activeMembers: 2,
           totalSharesOutstanding: 1,
           totalCostBasis: SHARE_PRICE,
-          totalCurrentValue: SHARE_PRICE,
           totalPendingAmount: 20_000,
           totalRejectedAmount: 0,
         },
@@ -724,6 +1106,12 @@ describe('Contributions (e2e)', () => {
           email: string;
           totalShares: number;
           currentPeriodStatus: string;
+          periods: Array<{
+            period: string;
+            dueAmount: number;
+            paidAmount: number;
+            status: string;
+          }>;
         }>;
       }>(response).members;
       expect(members).toHaveLength(2);
@@ -741,6 +1129,28 @@ describe('Contributions (e2e)', () => {
           }),
         ]),
       );
+
+      // Each member's own period-by-period history is included in full —
+      // what lets the analytics page drill into one member, or pivot the
+      // same data by period, without a second request per member.
+      const founderRow = members.find(
+        (member) => member.email === founder.user.email,
+      );
+      expect(
+        founderRow?.periods.find((period) => period.period === currentPeriod()),
+      ).toMatchObject({
+        dueAmount: SHARE_PRICE,
+        paidAmount: SHARE_PRICE,
+        status: 'satisfied',
+      });
+      const plainMemberRow = members.find(
+        (member) => member.email === 'analytics@example.com',
+      );
+      expect(
+        plainMemberRow?.periods.find(
+          (period) => period.period === currentPeriod(),
+        ),
+      ).toMatchObject({ dueAmount: SHARE_PRICE, paidAmount: 0, status: 'due' });
     });
 
     it("never mixes another tenant's members into the report", async () => {

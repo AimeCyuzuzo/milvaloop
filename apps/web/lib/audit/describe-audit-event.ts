@@ -36,6 +36,9 @@ type Describer = (event: AuditEvent) => string;
 // fallback covers anything not yet listed here.
 const DESCRIBERS: Record<string, Describer> = {
   'member.invited': (event) => `${actorLabel(event)} invited ${subjectLabel(event)}`,
+  'member.added': (event) => `${actorLabel(event)} added ${subjectLabel(event)}`,
+  'member.login_invited': (event) => `${actorLabel(event)} invited ${subjectLabel(event)} to claim a login`,
+  'member.login_claimed': (event) => `${subjectLabel(event)} claimed their login`,
   'member.invite_revoked': (event) => `${actorLabel(event)} revoked the invite to ${subjectLabel(event)}`,
   'member.invite_accepted': (event) => `${subjectLabel(event)} joined the cooperative`,
   'member.permissions_updated': (event) => `${actorLabel(event)} updated permissions for ${subjectLabel(event)}`,
@@ -48,6 +51,24 @@ const DESCRIBERS: Record<string, Describer> = {
     const amountClause = amount !== undefined ? ` to ${formatAmount(amount)}` : '';
     const effectiveClause = effectiveFrom ? ` effective ${formatPeriodLabel(effectiveFrom)}` : '';
     return `${actorLabel(event)} set the share price${amountClause}${effectiveClause}`;
+  },
+  'contribution.share_price_removed': (event) => {
+    const amount = numberField(event.metadata, 'amount');
+    const effectiveFrom = stringField(event.metadata, 'effectiveFrom');
+    const amountClause = amount !== undefined ? ` of ${formatAmount(amount)}` : '';
+    const effectiveClause = effectiveFrom ? ` effective ${formatPeriodLabel(effectiveFrom)}` : '';
+    return `${actorLabel(event)} removed the share price${amountClause}${effectiveClause}`;
+  },
+  'contribution.share_price_amount_edited': (event) => {
+    const previousAmount = numberField(event.metadata, 'previousAmount');
+    const amount = numberField(event.metadata, 'amount');
+    const effectiveFrom = stringField(event.metadata, 'effectiveFrom');
+    const effectiveClause = effectiveFrom ? ` effective ${formatPeriodLabel(effectiveFrom)}` : '';
+    const changeClause =
+      previousAmount !== undefined && amount !== undefined
+        ? ` from ${formatAmount(previousAmount)} to ${formatAmount(amount)}`
+        : '';
+    return `${actorLabel(event)} corrected the share price${effectiveClause}${changeClause}`;
   },
   'contribution.recorded': (event) => {
     const amount = numberField(event.metadata, 'amount');

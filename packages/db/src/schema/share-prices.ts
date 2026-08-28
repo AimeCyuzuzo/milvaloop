@@ -2,16 +2,24 @@ import { date, integer, pgTable, timestamp, unique, uuid } from 'drizzle-orm/pg-
 
 import { tenants } from './tenants.js';
 
-// The RWF value of one share, over time. Append-only, enforced in the
-// service layer, not by a DB trigger: a price is never edited or deleted
-// once other rows may reference it, because contribution_allocations pins
-// the specific row it used — inserting a corrected price is a new row with
-// its own effectiveFrom, not a mutation of an old one.
+// The RWF value of one share, over time. A new price point is its own row
+// with its own effectiveFrom — raising or lowering the price going forward
+// never touches an earlier row. A row's `amount` can still be corrected in
+// place after the fact, though (see ContributionsService.updateSharePrice),
+// for the one case that's for: fixing a value that was wrong from the
+// start. Because contribution_allocations pins the specific row it used
+// (see that table's own comment), such a correction reaches back and
+// changes what any period already recorded against this row shows as due
+// — the app warns about that at the point of the edit rather than
+// preventing it, since the alternative (a wrong historical price staying
+// wrong forever once anyone has paid against it) defeats the point of
+// being able to fix it at all.
 //
-// Which row applies to a given calendar period is "the latest one whose
-// effectiveFrom is on or before that period's start" — a share bought to
-// satisfy an old month is priced at what a share cost *then*, not at
-// today's price, even if the cooperative has since changed it.
+// Which row applies to a given calendar period, absent a contribution
+// already pinned to a specific one, is "the latest one whose effectiveFrom
+// is on or before that period's start" — a share bought to satisfy an old
+// month is priced at what a share cost *then*, not at today's price, even
+// if the cooperative has since changed it.
 export const sharePrices = pgTable(
   'share_prices',
   {

@@ -142,7 +142,19 @@ function AcceptAsCurrentUserCard({ token, tenantName }: { token: string; tenantN
 const createAccountFormSchema = z.object({ name: personNameSchema, password: passwordSchema });
 type CreateAccountFormValues = z.infer<typeof createAccountFormSchema>;
 
-function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; email: string; tenantName: string }) {
+function CreateAccountToJoinCard({
+  token,
+  email,
+  tenantName,
+  isClaim,
+  claimName,
+}: {
+  token: string;
+  email: string;
+  tenantName: string;
+  isClaim: boolean;
+  claimName: string | null;
+}) {
   const router = useRouter();
   const acceptInvite = useAcceptInviteMutation();
   const [formError, setFormError] = useState<string | null>(null);
@@ -150,7 +162,7 @@ function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; 
 
   const form = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountFormSchema),
-    defaultValues: { name: '', password: '' },
+    defaultValues: { name: claimName ?? '', password: '' },
   });
 
   async function onSubmit(values: CreateAccountFormValues) {
@@ -177,7 +189,7 @@ function CreateAccountToJoinCard({ token, email, tenantName }: { token: string; 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create your account to join {tenantName}</CardTitle>
+        <CardTitle>{isClaim ? `Claim your account for ${claimName ?? 'this member'}` : `Create your account to join ${tenantName}`}</CardTitle>
         <CardDescription>{email}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -282,13 +294,15 @@ function AcceptInviteFlow() {
     );
   }
 
-  const { email, tenantName, hasAccount } = lookup.data;
+  const { email, tenantName, hasAccount, isClaim, claimName } = lookup.data;
 
   if (!authenticatedSession) {
     if (hasAccount) {
       return <LogInToAcceptCard loginHref={loginHref} />;
     }
-    return <CreateAccountToJoinCard token={token} email={email} tenantName={tenantName} />;
+    return (
+      <CreateAccountToJoinCard token={token} email={email} tenantName={tenantName} isClaim={isClaim} claimName={claimName} />
+    );
   }
 
   if (authenticatedSession.user.email !== email) {

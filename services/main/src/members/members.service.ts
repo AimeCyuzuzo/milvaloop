@@ -25,15 +25,21 @@ import {
 import {
   PERMISSIONS,
   type AcceptInviteInput,
+  type AddPlaceholderMemberInput,
   type InviteLookupResult,
   type InviteMemberInput,
+  type MemberImportMapping,
+  type MemberImportPreview,
+  type MemberImportResult,
   type MemberListResponse,
   type PendingInvite,
 } from '@milvaloop/types';
 import * as argon2 from 'argon2';
+import { z } from 'zod';
 
 import { AuditLogService } from '../audit/audit-log.service';
 import { isUniqueViolation } from '../common/db-errors';
+import { todayIsoDate } from '../common/dates';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import { MAILER } from '../email/mailer.module';
@@ -44,6 +50,10 @@ import {
   type LoginOutcome,
 } from '../auth/auth.service';
 import { generateOpaqueToken, hashToken, parseTtlMs } from '../auth/tokens';
+import {
+  applyMemberImportMapping,
+  parseMemberImportWorkbook,
+} from './member-import';
 
 const { memberships, membershipInvites, tenants, users } = schema;
 
@@ -77,8 +87,10 @@ export class MembersService {
         userId: memberships.userId,
         name: users.name,
         email: users.email,
+        claimedAt: users.claimedAt,
         permissions: memberships.permissions,
         joinedAt: memberships.createdAt,
+        memberSince: memberships.memberSince,
         remindersPausedAt: memberships.remindersPausedAt,
       })
       .from(memberships)
@@ -93,8 +105,10 @@ export class MembersService {
         userId: memberships.userId,
         name: users.name,
         email: users.email,
+        claimedAt: users.claimedAt,
         permissions: memberships.permissions,
         joinedAt: memberships.createdAt,
+        memberSince: memberships.memberSince,
         removedAt: memberships.removedAt,
       })
       .from(memberships)
@@ -131,8 +145,10 @@ export class MembersService {
           userId: row.userId,
           name: row.name,
           email: row.email,
+          hasLogin: row.claimedAt !== null,
           permissions: row.permissions,
           joinedAt: row.joinedAt.toISOString(),
+          memberSince: row.memberSince,
           remindersPausedAt: row.remindersPausedAt?.toISOString() ?? null,
         })),
         ...inviteRows.map((row) => ({
@@ -150,8 +166,10 @@ export class MembersService {
           userId: row.userId,
           name: row.name,
           email: row.email,
+          hasLogin: row.claimedAt !== null,
           permissions: row.permissions,
           joinedAt: row.joinedAt.toISOString(),
+          memberSince: row.memberSince,
           // Non-null by construction (see the isNotNull filter above) —
           // Drizzle's column type stays nullable regardless of the query's
           // WHERE clause, so this is genuinely safe, not a lie to the type.
@@ -253,6 +271,239 @@ export class MembersService {
       invitedAt: invite.createdAt.toISOString(),
       expiresAt: invite.expiresAt.toISOString(),
     };
+  }
+
+  // A member added by name only, with no login at all — common where a
+  // member has no email or smartphone (see PLATFORM_BRAINSTORMING.md).
+  // Gets a synthetic, guaranteed-unique, non-deliverable email (the
+  // `.invalid` TLD is reserved by RFC 2606 for addresses that are never
+  // real) and a password hash of a random, immediately-discarded value —
+  // `claimedAt` stays null, which is the only thing that actually matters
+  // for recognizing this as a placeholder (see users.ts).
+  async addPlaceholderMember(
+    tenantId: string,
+    actorUserId: string,
+    input: AddPlaceholderMemberInput,
+  ): Promise<void> {
+    const passwordHash = await argon2.hash(generateOpaqueToken());
+    const syntheticEmail = `placeholder-${generateOpaqueToken().slice(0, 16)}@members.milvaloop.invalid`;
+
+    await this.db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({
+          name: input.name,
+          email: syntheticEmail,
+          passwordHash,
+          claimedAt: null,
+        })
+        .returning();
+
+      const [membership] = await tx
+        .insert(memberships)
+        .values({
+          userId: user.id,
+          tenantId,
+          permissions: [],
+          memberSince: input.memberSince,
+        })
+        .returning();
+
+      await this.auditLog.record(tx, {
+        tenantId,
+        actorUserId,
+        action: 'member.added',
+        entityType: 'membership',
+        entityId: membership.id,
+        metadata: { name: input.name },
+      });
+    });
+  }
+
+  // Attaches a real login to an existing placeholder membership — sends a
+  // claim-login invite that, on accept, updates that same user row in
+  // place (see acceptInvite's claimUserId branch) rather than creating a
+  // new membership, so the placeholder's history stays exactly where it
+  // is.
+  async inviteLoginForPlaceholder(
+    tenantId: string,
+    membershipId: string,
+    actorUserId: string,
+    email: string,
+  ): Promise<void> {
+    const [membership] = await this.db
+      .select({
+        userId: memberships.userId,
+        name: users.name,
+        claimedAt: users.claimedAt,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(
+        and(
+          eq(memberships.id, membershipId),
+          eq(memberships.tenantId, tenantId),
+          isNull(memberships.removedAt),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      throw new NotFoundException('No active member found');
+    }
+    if (membership.claimedAt) {
+      throw new BadRequestException('This member already has a login');
+    }
+
+    const rawToken = generateOpaqueToken();
+    const expiresAt = new Date(Date.now() + parseTtlMs(INVITE_TTL));
+
+    let invite: typeof membershipInvites.$inferSelect;
+    try {
+      invite = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(membershipInvites)
+          .values({
+            tenantId,
+            email,
+            permissions: [],
+            invitedByUserId: actorUserId,
+            claimUserId: membership.userId,
+            tokenHash: hashToken(rawToken),
+            expiresAt,
+          })
+          .returning();
+
+        await this.auditLog.record(tx, {
+          tenantId,
+          actorUserId,
+          action: 'member.login_invited',
+          entityType: 'membership_invite',
+          entityId: row.id,
+          metadata: { name: membership.name, email },
+        });
+
+        return row;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, 'membership_invites_pending_email_unique')) {
+        throw new ConflictException(
+          'An invite is already pending for this email',
+        );
+      }
+      throw error;
+    }
+
+    const [tenant] = await this.db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    const [inviter] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, actorUserId))
+      .limit(1);
+    const acceptUrl = `${env.WEB_ORIGIN}/invite/accept?token=${rawToken}`;
+    const { html, text } = await renderEmail(
+      InviteEmail({
+        tenantName: tenant.name,
+        invitedByName: inviter.name,
+        acceptUrl,
+      }),
+    );
+    await this.mailer
+      .send({
+        to: invite.email,
+        subject: `Claim your login for ${tenant.name} on MilvaLoop`,
+        html,
+        text,
+      })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to send claim-login invite email to ${invite.email}`,
+          error,
+        );
+      });
+  }
+
+  // Parses only the first sheet's headers and a small sample of rows — the
+  // frontend drives its column-mapping form from this, without a second
+  // upload once the mapping is confirmed.
+  async previewImport(buffer: Buffer): Promise<MemberImportPreview> {
+    const parsed = await parseMemberImportWorkbook(buffer);
+    return { columns: parsed.columns, sampleRows: parsed.rows.slice(0, 5) };
+  }
+
+  // Every row is processed independently and reported on — one bad row
+  // (no name, a malformed email) never drops the rest, and the caller
+  // always gets a complete, honest picture of what happened rather than a
+  // silent partial success. A mapped email becomes a normal invite (see
+  // invite() above, reused as-is rather than duplicated); no email
+  // becomes a placeholder member.
+  async importMembers(
+    tenantId: string,
+    actorUserId: string,
+    buffer: Buffer,
+    mapping: MemberImportMapping,
+  ): Promise<MemberImportResult> {
+    const parsed = await parseMemberImportWorkbook(buffer);
+    const mapped = applyMemberImportMapping(parsed.rows, mapping);
+
+    const rows: MemberImportResult['rows'] = [];
+    for (const [index, row] of mapped.entries()) {
+      // +1 for the header row, +1 to move from a 0-index to a 1-index —
+      // this is the row number a person opening the same file in Excel
+      // would see it as.
+      const rowNumber = index + 2;
+      if (!row) {
+        rows.push({
+          outcome: 'skipped',
+          row: rowNumber,
+          reason: 'No name found in this row',
+        });
+        continue;
+      }
+
+      try {
+        if (row.email) {
+          if (!z.email().safeParse(row.email).success) {
+            rows.push({
+              outcome: 'skipped',
+              row: rowNumber,
+              reason: `"${row.email}" isn't a valid email`,
+            });
+            continue;
+          }
+          await this.invite(tenantId, actorUserId, {
+            email: row.email,
+            permissions: [],
+          });
+          rows.push({
+            outcome: 'invited',
+            row: rowNumber,
+            name: row.name,
+            email: row.email,
+          });
+        } else {
+          await this.addPlaceholderMember(tenantId, actorUserId, {
+            name: row.name,
+            memberSince: mapping.memberSince,
+          });
+          rows.push({ outcome: 'added', row: rowNumber, name: row.name });
+        }
+      } catch (error) {
+        rows.push({
+          outcome: 'skipped',
+          row: rowNumber,
+          reason:
+            error instanceof ConflictException
+              ? error.message
+              : 'Could not add this row',
+        });
+      }
+    }
+
+    return { rows };
   }
 
   async revokeInvite(
@@ -560,11 +811,23 @@ export class MembersService {
       .where(eq(users.email, invite.email))
       .limit(1);
 
+    let claimName: string | null = null;
+    if (invite.claimUserId) {
+      const [placeholder] = await this.db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, invite.claimUserId))
+        .limit(1);
+      claimName = placeholder?.name ?? null;
+    }
+
     return {
       status: 'pending',
       email: invite.email,
       tenantName: tenant.name,
       hasAccount: !!existingUser,
+      isClaim: !!invite.claimUserId,
+      claimName,
     };
   }
 
@@ -596,6 +859,16 @@ export class MembersService {
         `This invite was sent to ${invite.email}, not ${claims.email}`,
       );
     }
+    if (invite.claimUserId) {
+      // Reaching this path means the target email already belongs to an
+      // existing MilvaLoop account (that's exactly what routes the
+      // frontend here instead of acceptInvite) — merging a placeholder's
+      // history into a separate, pre-existing identity is out of scope
+      // for now (see acceptInvite's matching guard).
+      throw new BadRequestException(
+        "This member's history can't be linked to an existing MilvaLoop account",
+      );
+    }
 
     await this.db.transaction(async (tx) => {
       const [reloaded] = await tx
@@ -617,6 +890,7 @@ export class MembersService {
           userId: claims.sub,
           tenantId: invite.tenantId,
           permissions: invite.permissions,
+          memberSince: todayIsoDate(),
         });
       } catch (error) {
         if (isUniqueViolation(error, 'memberships_user_id_tenant_id_unique')) {
@@ -696,7 +970,10 @@ export class MembersService {
       // (e.g. the invitee signed up separately in another tab). Rejecting
       // outright, rather than logging in as that account, follows directly
       // from the same rule as joinViaInvite above: an invite link is
-      // authorization to join, not proof of identity.
+      // authorization to join, not proof of identity. This also doubles as
+      // the claim-login flow's collision guard below — merging a
+      // placeholder's history into a pre-existing MilvaLoop identity is
+      // out of scope, so it's rejected the same way.
       const [existingUser] = await tx
         .select({ id: users.id })
         .from(users)
@@ -704,7 +981,9 @@ export class MembersService {
         .limit(1);
       if (existingUser) {
         throw new ConflictException(
-          'An account with this email already exists — please log in instead',
+          invite.claimUserId
+            ? "An account with this email already exists — this member's history can't be automatically linked"
+            : 'An account with this email already exists — please log in instead',
         );
       }
 
@@ -713,29 +992,63 @@ export class MembersService {
       // a self-serve signup where nothing yet ties the email to the
       // person clicking through.
       const passwordHash = await argon2.hash(input.password);
-      const [targetUser] = await tx
-        .insert(users)
-        .values({
-          name: input.name,
-          email: invite.email,
-          passwordHash,
-          emailVerifiedAt: new Date(),
-        })
-        .returning();
 
-      try {
-        await tx.insert(memberships).values({
-          userId: targetUser.id,
-          tenantId: invite.tenantId,
-          permissions: invite.permissions,
-        });
-      } catch (error) {
-        if (isUniqueViolation(error, 'memberships_user_id_tenant_id_unique')) {
-          throw new ConflictException(
-            'You are already a member of this cooperative',
-          );
+      let targetUser: typeof users.$inferSelect;
+      if (invite.claimUserId) {
+        // Claiming a placeholder updates its existing user row in place —
+        // same id, so the membership it already belongs to (and every
+        // contribution/audit event that already references it) is
+        // untouched. No memberships insert: it already exists.
+        const [placeholder] = await tx
+          .select({ claimedAt: users.claimedAt })
+          .from(users)
+          .where(eq(users.id, invite.claimUserId))
+          .limit(1);
+        if (!placeholder || placeholder.claimedAt) {
+          throw invalid();
         }
-        throw error;
+        const [updated] = await tx
+          .update(users)
+          .set({
+            name: input.name,
+            email: invite.email,
+            passwordHash,
+            emailVerifiedAt: new Date(),
+            claimedAt: new Date(),
+          })
+          .where(eq(users.id, invite.claimUserId))
+          .returning();
+        targetUser = updated;
+      } else {
+        const [inserted] = await tx
+          .insert(users)
+          .values({
+            name: input.name,
+            email: invite.email,
+            passwordHash,
+            emailVerifiedAt: new Date(),
+            claimedAt: new Date(),
+          })
+          .returning();
+        targetUser = inserted;
+
+        try {
+          await tx.insert(memberships).values({
+            userId: targetUser.id,
+            tenantId: invite.tenantId,
+            permissions: invite.permissions,
+            memberSince: todayIsoDate(),
+          });
+        } catch (error) {
+          if (
+            isUniqueViolation(error, 'memberships_user_id_tenant_id_unique')
+          ) {
+            throw new ConflictException(
+              'You are already a member of this cooperative',
+            );
+          }
+          throw error;
+        }
       }
 
       await tx
@@ -746,7 +1059,9 @@ export class MembersService {
       await this.auditLog.record(tx, {
         tenantId: invite.tenantId,
         actorUserId: targetUser.id,
-        action: 'member.invite_accepted',
+        action: invite.claimUserId
+          ? 'member.login_claimed'
+          : 'member.invite_accepted',
         entityType: 'membership_invite',
         entityId: invite.id,
         metadata: { name: targetUser.name, email: invite.email },

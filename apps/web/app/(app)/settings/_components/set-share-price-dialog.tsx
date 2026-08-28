@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { setSharePriceSchema, type SetSharePriceInput } from '@milvaloop/types';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
+import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import {
   Dialog,
@@ -19,7 +20,6 @@ import {
 } from '@milvaloop/ui/dialog';
 import { DatePicker } from '@milvaloop/ui/date-picker';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
-import { Input } from '@milvaloop/ui/input';
 
 import { currentPeriod } from '@/lib/contributions/format-period';
 import { applyServerError } from '@/lib/forms/apply-server-error';
@@ -93,13 +93,10 @@ export function SetSharePriceDialog({ triggerLabel }: { triggerLabel: string }) 
                 <FormItem>
                   <FormLabel>Price per share (RWF)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
+                    <AmountInput
                       name={field.name}
-                      value={Number.isNaN(field.value) ? '' : field.value}
-                      onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                      value={Number.isNaN(field.value) ? undefined : field.value}
+                      onChange={field.onChange}
                       onBlur={field.onBlur}
                       ref={field.ref}
                     />

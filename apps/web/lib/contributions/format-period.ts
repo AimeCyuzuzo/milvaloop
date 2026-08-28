@@ -38,3 +38,16 @@ export function nextPeriod(period: string): string {
   const nextMonth = String(next.getUTCMonth() + 1).padStart(2, '0');
   return `${next.getUTCFullYear()}-${nextMonth}-01`;
 }
+
+// The first day of the month before `period` — symmetric to nextPeriod,
+// same Date.UTC roll-under trick one month earlier. Used to manually
+// extend the historical-entry grid's column range backward past whatever
+// it computed on its own.
+export function previousPeriod(period: string): string {
+  const parts = period.split('-').map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 0;
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  const previousMonth = String(previous.getUTCMonth() + 1).padStart(2, '0');
+  return `${previous.getUTCFullYear()}-${previousMonth}-01`;
+}

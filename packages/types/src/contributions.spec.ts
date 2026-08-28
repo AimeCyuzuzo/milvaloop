@@ -4,8 +4,10 @@ import {
   allocationLineSchema,
   previewAllocationSchema,
   recordContributionSchema,
+  recordHistoricalBatchSchema,
   rejectContributionSchema,
   setSharePriceSchema,
+  updateSharePriceSchema,
 } from './contributions.js';
 
 describe('recordContributionSchema', () => {
@@ -101,5 +103,50 @@ describe('setSharePriceSchema', () => {
 
   it('rejects a malformed effective date', () => {
     expect(setSharePriceSchema.safeParse({ amount: 50_000, effectiveFrom: 'next month' }).success).toBe(false);
+  });
+});
+
+describe('updateSharePriceSchema', () => {
+  it('accepts a positive amount', () => {
+    expect(updateSharePriceSchema.safeParse({ amount: 60_000 }).success).toBe(true);
+  });
+
+  it('rejects a zero amount', () => {
+    expect(updateSharePriceSchema.safeParse({ amount: 0 }).success).toBe(false);
+  });
+
+  it('rejects a negative amount', () => {
+    expect(updateSharePriceSchema.safeParse({ amount: -1 }).success).toBe(false);
+  });
+
+  it('rejects a non-integer amount', () => {
+    expect(updateSharePriceSchema.safeParse({ amount: 60_000.5 }).success).toBe(false);
+  });
+
+  it('strips an effectiveFrom if sent — moving the price is not what this endpoint does', () => {
+    const result = updateSharePriceSchema.safeParse({ amount: 60_000, effectiveFrom: '2026-09-01' });
+    expect(result.success && 'effectiveFrom' in result.data).toBe(false);
+  });
+});
+
+describe('recordHistoricalBatchSchema', () => {
+  const entry = {
+    membershipId: '11111111-1111-4111-8111-111111111111',
+    contributedAt: '2024-01-31',
+    allocations: [{ period: '2024-01-01', amount: 70_000 }],
+  };
+
+  it('accepts one or more entries, each with its own allocations', () => {
+    const result = recordHistoricalBatchSchema.safeParse({ entries: [entry, { ...entry, contributedAt: '2024-02-29' }] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty entries array', () => {
+    expect(recordHistoricalBatchSchema.safeParse({ entries: [] }).success).toBe(false);
+  });
+
+  it('rejects an entry with no allocations', () => {
+    const result = recordHistoricalBatchSchema.safeParse({ entries: [{ ...entry, allocations: [] }] });
+    expect(result.success).toBe(false);
   });
 });

@@ -73,6 +73,11 @@ export default function ContributionsPage() {
           <Button asChild variant="outline" size="sm">
             <Link href="/contributions/analytics">View analytics</Link>
           </Button>
+          {canRecordForOthers ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/contributions/import">Import history</Link>
+            </Button>
+          ) : null}
         </div>
         {canRecordForOthers ? (
           <RecordContributionDialog triggerLabel="Record a contribution" />

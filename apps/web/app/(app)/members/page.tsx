@@ -8,8 +8,8 @@ import { Skeleton } from '@milvaloop/ui/skeleton';
 import { useHasPermission } from '@/lib/auth/use-permissions';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
+import { AddMemberMenu } from './_components/add-member-menu';
 import { memberColumns } from './_components/columns';
-import { InviteMemberDialog } from './_components/invite-member-dialog';
 
 // The page title/description live in the app shell's top bar (see
 // AppLayout + page-headers.ts), not here — this page only owns its content.
@@ -21,7 +21,7 @@ export default function MembersPage() {
     <div className="flex flex-col gap-6">
       {canInvite ? (
         <div className="flex justify-end">
-          <InviteMemberDialog />
+          <AddMemberMenu />
         </div>
       ) : null}
 

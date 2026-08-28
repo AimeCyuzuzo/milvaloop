@@ -1,8 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   AcceptInviteInput,
+  AddPlaceholderMemberInput,
   AuthSession,
+  InviteLoginInput,
   InviteMemberInput,
+  MemberImportMapping,
+  MemberImportPreview,
+  MemberImportResult,
   PendingInvite,
   UpdateMemberPermissionsInput,
   UpdateReminderPauseInput,
@@ -17,6 +22,51 @@ export function useInviteMemberMutation() {
 
   return useMutation({
     mutationFn: (input: InviteMemberInput) => apiFetch<PendingInvite>('/members/invite', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
+  });
+}
+
+export function useAddPlaceholderMemberMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: AddPlaceholderMemberInput) =>
+      apiFetch<void>('/members/placeholder', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
+  });
+}
+
+// Attaches a real login to an existing placeholder membership (see
+// MembersService.inviteLoginForPlaceholder) — doesn't change the members
+// list itself (the row still shows "No login yet" until the invite is
+// actually accepted), so no cache invalidation on success.
+export function useInviteLoginMutation() {
+  return useMutation({
+    mutationFn: ({ membershipId, ...input }: InviteLoginInput & { membershipId: string }) =>
+      apiFetch<void>(`/members/${membershipId}/invite-login`, { method: 'POST', body: JSON.stringify(input) }),
+  });
+}
+
+export function usePreviewImportMutation() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiFetch<MemberImportPreview>('/members/import/preview', { method: 'POST', body: formData });
+    },
+  });
+}
+
+export function useImportMembersMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ file, mapping }: { file: File; mapping: MemberImportMapping }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('mapping', JSON.stringify(mapping));
+      return apiFetch<MemberImportResult>('/members/import', { method: 'POST', body: formData });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
   });
 }

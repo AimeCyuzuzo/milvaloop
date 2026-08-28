@@ -1,11 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
+  ApproveAllPendingResponse,
   PreviewAllocationInput,
   PreviewAllocationResponse,
   RecordContributionInput,
+  RecordHistoricalBatchInput,
+  RecordHistoricalBatchResponse,
   RejectContributionInput,
   SetSharePriceInput,
   SharePrice,
+  UpdateSharePriceInput,
 } from '@milvaloop/types';
 
 import { apiFetch } from '../api/api-fetch';
@@ -25,6 +29,25 @@ export function useRecordContributionMutation() {
   return useMutation({
     mutationFn: (input: RecordContributionInput) =>
       apiFetch<void>('/contributions', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useRecordHistoricalBatchMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RecordHistoricalBatchInput) =>
+      apiFetch<RecordHistoricalBatchResponse>('/contributions/import', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+// A convenience over approving one at a time after a large import — see
+// ContributionsService.approveAllPending.
+export function useApproveAllPendingMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<ApproveAllPendingResponse>('/contributions/approve-all-pending', { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
   });
 }
@@ -51,6 +74,23 @@ export function useSetSharePriceMutation() {
   return useMutation({
     mutationFn: (input: SetSharePriceInput) =>
       apiFetch<SharePrice>('/contributions/settings', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useUpdateSharePriceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ priceId, ...input }: UpdateSharePriceInput & { priceId: string }) =>
+      apiFetch<SharePrice>(`/contributions/settings/${priceId}`, { method: 'PATCH', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useDeleteSharePriceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (priceId: string) => apiFetch<void>(`/contributions/settings/${priceId}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
   });
 }

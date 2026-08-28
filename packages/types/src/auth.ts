@@ -88,6 +88,11 @@ export const authSessionSchema = z.object({
     id: z.uuid(),
     name: z.string(),
     slug: z.string(),
+    // Null until this cooperative's founder finishes (or skips) the
+    // guided setup wizard — the frontend redirects into it whenever this
+    // is null rather than showing the normal dashboard (see
+    // apps/web/app/(app)/layout.tsx).
+    onboardedAt: z.iso.datetime().nullable(),
   }),
   permissions: z.array(z.string()),
   // Every cooperative this user holds a membership in, not just the

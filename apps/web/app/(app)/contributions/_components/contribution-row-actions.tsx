@@ -8,6 +8,7 @@ import { Button } from '@milvaloop/ui/button';
 import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@milvaloop/ui/tooltip';
 
+import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useHasPermission } from '@/lib/auth/use-permissions';
 import { formatAmount, formatDate } from '@/lib/contributions/format-period';
 import { useApproveContributionMutation } from '@/lib/contributions/use-contribution-mutations';
@@ -48,7 +49,15 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
   const isSelfLocked = eligibleApprovers > 1 && contribution.recordedBy.membershipId === myMembershipId;
 
   async function handleApprove() {
-    await approve.mutateAsync(contribution.id);
+    // ConfirmDialog surfaces whatever this throws verbatim as its own
+    // message — an ApiError's own .message is just "METHOD /path failed
+    // with 4xx", so the server's actual reason has to be pulled out here
+    // before it reaches the dialog.
+    try {
+      await approve.mutateAsync(contribution.id);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
     toast.success('Contribution approved.');
   }
 

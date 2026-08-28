@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useHasPermission } from '@/lib/auth/use-permissions';
 
 import { EditPermissionsSheet } from './edit-permissions-sheet';
+import { InviteLoginDialog } from './invite-login-dialog';
 import { RemoveMemberDialog } from './remove-member-dialog';
 
 // Dialog/Sheet are rendered as siblings of the DropdownMenu, not nested
@@ -23,10 +24,13 @@ import { RemoveMemberDialog } from './remove-member-dialog';
 export function MemberRowActions({ member }: { member: ActiveMember }) {
   const [editOpen, setEditOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [inviteLoginOpen, setInviteLoginOpen] = useState(false);
   const canEdit = useHasPermission(PERMISSIONS.MEMBERS_EDIT);
   const canRemove = useHasPermission(PERMISSIONS.MEMBERS_REMOVE);
+  const canInvite = useHasPermission(PERMISSIONS.MEMBERS_INVITE);
+  const canSendLoginInvite = canInvite && !member.hasLogin;
 
-  if (!canEdit && !canRemove) {
+  if (!canEdit && !canRemove && !canSendLoginInvite) {
     return null;
   }
 
@@ -39,6 +43,9 @@ export function MemberRowActions({ member }: { member: ActiveMember }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {canSendLoginInvite ? (
+            <DropdownMenuItem onSelect={() => setInviteLoginOpen(true)}>Send login invite</DropdownMenuItem>
+          ) : null}
           {canEdit ? (
             <DropdownMenuItem onSelect={() => setEditOpen(true)}>Edit permissions</DropdownMenuItem>
           ) : null}
@@ -51,6 +58,9 @@ export function MemberRowActions({ member }: { member: ActiveMember }) {
       </DropdownMenu>
       {canEdit ? <EditPermissionsSheet member={member} open={editOpen} onOpenChange={setEditOpen} /> : null}
       {canRemove ? <RemoveMemberDialog member={member} open={removeOpen} onOpenChange={setRemoveOpen} /> : null}
+      {canSendLoginInvite ? (
+        <InviteLoginDialog member={member} open={inviteLoginOpen} onOpenChange={setInviteLoginOpen} />
+      ) : null}
     </>
   );
 }

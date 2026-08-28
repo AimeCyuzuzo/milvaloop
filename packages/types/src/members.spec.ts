@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptInviteSchema, inviteLookupResultSchema, updateReminderPauseSchema } from './members.js';
+import {
+  acceptInviteSchema,
+  addPlaceholderMemberSchema,
+  inviteLoginSchema,
+  inviteLookupResultSchema,
+  memberImportMappingSchema,
+  updateReminderPauseSchema,
+} from './members.js';
 
 describe('acceptInviteSchema', () => {
   it('accepts a token, name, and password', () => {
@@ -44,6 +51,8 @@ describe('inviteLookupResultSchema', () => {
       email: 'invitee@example.com',
       tenantName: 'Umurenge Savings Group',
       hasAccount: true,
+      isClaim: false,
+      claimName: null,
     });
     expect(result.success).toBe(true);
   });
@@ -54,6 +63,20 @@ describe('inviteLookupResultSchema', () => {
       email: 'invitee@example.com',
       tenantName: 'Umurenge Savings Group',
       hasAccount: false,
+      isClaim: false,
+      claimName: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a claim-login invite for an existing placeholder member', () => {
+    const result = inviteLookupResultSchema.safeParse({
+      status: 'pending',
+      email: 'invitee@example.com',
+      tenantName: 'Umurenge Savings Group',
+      hasAccount: false,
+      isClaim: true,
+      claimName: 'Beata Uwase',
     });
     expect(result.success).toBe(true);
   });
@@ -90,5 +113,53 @@ describe('updateReminderPauseSchema', () => {
 
   it('rejects a missing paused field', () => {
     expect(updateReminderPauseSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('addPlaceholderMemberSchema', () => {
+  it('accepts a name and a member-since date', () => {
+    const result = addPlaceholderMemberSchema.safeParse({ name: 'Beata Uwase', memberSince: '2023-01-01' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty name', () => {
+    const result = addPlaceholderMemberSchema.safeParse({ name: '', memberSince: '2023-01-01' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a malformed memberSince', () => {
+    const result = addPlaceholderMemberSchema.safeParse({ name: 'Beata Uwase', memberSince: 'not-a-date' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('inviteLoginSchema', () => {
+  it('accepts a valid email', () => {
+    expect(inviteLoginSchema.safeParse({ email: 'beata@example.com' }).success).toBe(true);
+  });
+
+  it('rejects a malformed email', () => {
+    expect(inviteLoginSchema.safeParse({ email: 'not-an-email' }).success).toBe(false);
+  });
+});
+
+describe('memberImportMappingSchema', () => {
+  it('accepts a single name column with no email column', () => {
+    const result = memberImportMappingSchema.safeParse({ nameColumns: [0], memberSince: '2023-01-01' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts combined name columns and an email column', () => {
+    const result = memberImportMappingSchema.safeParse({
+      nameColumns: [0, 1],
+      emailColumn: 2,
+      memberSince: '2023-01-01',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty nameColumns array', () => {
+    const result = memberImportMappingSchema.safeParse({ nameColumns: [], memberSince: '2023-01-01' });
+    expect(result.success).toBe(false);
   });
 });

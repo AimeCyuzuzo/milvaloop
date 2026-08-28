@@ -168,6 +168,25 @@ export function useUpdateProfileMutation() {
   });
 }
 
+// Marks the active tenant's guided setup wizard done (see
+// AuthService.completeOnboarding) — patches the cached session directly,
+// same reasoning as useUpdateProfileMutation, so AppLayout's onboarding
+// gate sees the change immediately without a refetch.
+export function useCompleteOnboardingMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/cooperatives/complete-onboarding', { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.setQueryData<CurrentSession>(CURRENT_SESSION_QUERY_KEY, (current) =>
+        current
+          ? { ...current, tenant: { ...current.tenant, onboardedAt: new Date().toISOString() } }
+          : current,
+      );
+    },
+  });
+}
+
 export function useLogoutMutation() {
   const queryClient = useQueryClient();
 

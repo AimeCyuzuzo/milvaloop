@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { AllocationProposalLine } from '@milvaloop/types';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
+import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import { DatePicker } from '@milvaloop/ui/date-picker';
 import {
@@ -28,6 +29,7 @@ import { getErrorMessage } from '@/lib/api/api-fetch';
 import { canAdjustTail, describeAllocationLine, tailToggleLabel, toggleTail } from '@/lib/contributions/allocation-adjustments';
 import { formatAmount, formatPeriodLabel } from '@/lib/contributions/format-period';
 import { usePreviewAllocationMutation, useRecordContributionMutation } from '@/lib/contributions/use-contribution-mutations';
+import { todayIsoDate } from '@/lib/dates';
 import { applyServerError } from '@/lib/forms/apply-server-error';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
@@ -38,10 +40,6 @@ const detailsSchema = z.object({
   note: z.string().max(500).optional(),
 });
 type DetailsValues = z.infer<typeof detailsSchema>;
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 interface RecordContributionDialogProps {
   triggerLabel: string;
@@ -213,13 +211,10 @@ export function RecordContributionDialog({
                   <FormItem>
                     <FormLabel>Amount (RWF)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        step={1}
+                      <AmountInput
                         name={field.name}
-                        value={Number.isNaN(field.value) ? '' : field.value}
-                        onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                        value={Number.isNaN(field.value) ? undefined : field.value}
+                        onChange={field.onChange}
                         onBlur={field.onBlur}
                         ref={field.ref}
                       />

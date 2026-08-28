@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { Separator } from '@milvaloop/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@milvaloop/ui/sidebar';
@@ -21,14 +21,46 @@ import { usePageHeader } from './_components/page-headers';
 // server-side for a signed-out visitor.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session, isPending, isError } = useCurrentSessionQuery();
   const pageHeader = usePageHeader();
+  const isOnboardingRoute = pathname.startsWith('/onboarding');
+  // The wizard itself links out to the real Members, historical-import,
+  // and ledger pages to do the actual setup work (adding members,
+  // backfilling contributions, approving what was just imported) rather
+  // than duplicating them inline — those stay reachable without bouncing
+  // back to /onboarding, unlike everything else. They're ordinary pages
+  // once onboarding is done, though, so this only ever widens what's
+  // reachable *before* completion — it must never feed the "already done,
+  // get out of /onboarding" check below, or finishing setup would start
+  // redirecting a normal visit to Members away from itself.
+  const reachableDuringOnboarding =
+    isOnboardingRoute ||
+    pathname === '/members' ||
+    pathname === '/members/import' ||
+    pathname === '/contributions' ||
+    pathname === '/contributions/import';
 
   useEffect(() => {
     if (!isPending && (isError || !session)) {
       router.replace('/auth/login');
     }
   }, [isPending, isError, session, router]);
+
+  // A tenant with no guided setup finished yet is redirected into it on
+  // every route until it is — and away from it once it's done, so a stale
+  // /onboarding link never re-opens a wizard for a cooperative already up
+  // and running (see AuthService.completeOnboarding).
+  useEffect(() => {
+    if (isPending || !session) {
+      return;
+    }
+    if (!session.tenant.onboardedAt && !reachableDuringOnboarding) {
+      router.replace('/onboarding');
+    } else if (session.tenant.onboardedAt && isOnboardingRoute) {
+      router.replace('/dashboard');
+    }
+  }, [isPending, session, reachableDuringOnboarding, isOnboardingRoute, router]);
 
   if (isPending || !session) {
     return (

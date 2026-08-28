@@ -5,6 +5,7 @@ import type { ActiveMember } from '@milvaloop/types';
 
 import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
 
+import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useRemoveMemberMutation } from '@/lib/members/use-members-mutations';
 
 export function RemoveMemberDialog({
@@ -19,7 +20,15 @@ export function RemoveMemberDialog({
   const remove = useRemoveMemberMutation();
 
   async function handleRemove() {
-    await remove.mutateAsync(member.membershipId);
+    // ConfirmDialog surfaces whatever this throws verbatim as its own
+    // message — an ApiError's own .message is just "METHOD /path failed
+    // with 4xx", so the server's actual reason has to be pulled out here
+    // before it reaches the dialog.
+    try {
+      await remove.mutateAsync(member.membershipId);
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
     toast.success(`Removed ${member.name}.`);
   }
 

@@ -64,6 +64,40 @@ export type RecordContributionInput = z.infer<typeof recordContributionSchema>;
 export const contributionIdParamSchema = z.object({ id: z.uuid() });
 export type ContributionIdParam = z.infer<typeof contributionIdParamSchema>;
 
+// POST /contributions/import — the historical-entry grid's submission. One
+// entry per member with at least one filled cell; `allocations` are the
+// grid's cells directly, never a waterfall proposal — historical entry
+// states what already happened, it doesn't propose how new money should
+// apply. The contribution's own `amount` is derived server-side as the
+// sum of its allocations rather than repeated here.
+export const historicalContributionEntrySchema = z.object({
+  membershipId: z.uuid(),
+  contributedAt: periodSchema,
+  allocations: z.array(allocationLineSchema).min(1),
+});
+export type HistoricalContributionEntry = z.infer<typeof historicalContributionEntrySchema>;
+
+export const recordHistoricalBatchSchema = z.object({
+  entries: z.array(historicalContributionEntrySchema).min(1),
+});
+export type RecordHistoricalBatchInput = z.infer<typeof recordHistoricalBatchSchema>;
+
+export const recordHistoricalBatchResponseSchema = z.object({
+  contributionIds: z.array(z.uuid()),
+});
+export type RecordHistoricalBatchResponse = z.infer<typeof recordHistoricalBatchResponseSchema>;
+
+// POST /contributions/approve-all-pending — a convenience over approving
+// one at a time after a large import. Each pending contribution is
+// approved independently under the exact same self-approval rule as
+// POST /contributions/:id/approve, so one that fails it is reported, not
+// silently skipped or allowed to block the rest.
+export const approveAllPendingResponseSchema = z.object({
+  approved: z.array(z.uuid()),
+  failed: z.array(z.object({ id: z.uuid(), reason: z.string() })),
+});
+export type ApproveAllPendingResponse = z.infer<typeof approveAllPendingResponseSchema>;
+
 // POST /contributions/:id/reject
 export const rejectContributionSchema = z.object({
   reason: z.string().min(1).max(500),
@@ -106,11 +140,12 @@ export const contributionListResponseSchema = z.object({
 export type ContributionListResponse = z.infer<typeof contributionListResponseSchema>;
 
 // GET /contributions/members/:membershipId/summary — the "explain this"
-// surface. `costBasis` (money actually paid, ever) is the number the
-// frontend treats as the headline figure; `currentValue` (shares × today's
-// price) is present but secondary, since it can move on its own whenever
-// the cooperative changes its share price, independent of anything this
-// member did.
+// surface. `costBasis` (money actually paid, ever) is the headline figure —
+// a share, once fully paid, was settled at that period's own price for
+// good; there is no ongoing revaluation of it against a later price change,
+// the way a market asset would have (a savings cooperative's share price
+// only ever governs what's due *going forward*, never what a past period
+// already meant).
 export const periodStatusSchema = z.object({
   period: periodSchema,
   dueAmount: z.number().int().positive(),
@@ -123,7 +158,6 @@ export const memberContributionSummarySchema = z.object({
   membershipId: z.uuid(),
   totalShares: z.number().int().nonnegative(),
   costBasis: z.number().int().nonnegative(),
-  currentValue: z.number().int().nonnegative(),
   periods: z.array(periodStatusSchema),
 });
 export type MemberContributionSummary = z.infer<typeof memberContributionSummarySchema>;
@@ -136,6 +170,11 @@ export const sharePriceSchema = z.object({
   id: z.uuid(),
   amount: z.number().int().positive(),
   effectiveFrom: periodSchema,
+  // Whether any contribution allocation is already pinned to this exact
+  // price row (see contribution-allocations.ts) — the frontend's cue for
+  // whether editing this entry's amount needs the retroactive-effect
+  // warning, since a price nothing has used yet can be corrected freely.
+  usedByContributions: z.boolean(),
 });
 export type SharePrice = z.infer<typeof sharePriceSchema>;
 
@@ -150,6 +189,21 @@ export const setSharePriceSchema = z.object({
   effectiveFrom: periodSchema,
 });
 export type SetSharePriceInput = z.infer<typeof setSharePriceSchema>;
+
+// PATCH/DELETE /contributions/settings/:id
+export const sharePriceIdParamSchema = z.object({ id: z.uuid() });
+export type SharePriceIdParam = z.infer<typeof sharePriceIdParamSchema>;
+
+// PATCH /contributions/settings/:id — corrects an existing price point's
+// amount in place, unlike POST /contributions/settings which only ever adds
+// a new one. `effectiveFrom` is deliberately not editable here: moving which
+// period a price applies to is a structural change (it can collide with a
+// neighboring price's own range), whereas fixing an amount that was entered
+// wrong is not.
+export const updateSharePriceSchema = z.object({
+  amount: z.number().int().positive(),
+});
+export type UpdateSharePriceInput = z.infer<typeof updateSharePriceSchema>;
 
 // GET /contributions/compliance-summary — a tenant-wide snapshot of the
 // current period only, for the dashboard's "how is this month going"
@@ -177,7 +231,6 @@ export const analyticsTotalsSchema = z.object({
   activeMembers: z.number().int().nonnegative(),
   totalSharesOutstanding: z.number().int().nonnegative(),
   totalCostBasis: z.number().int().nonnegative(),
-  totalCurrentValue: z.number().int().nonnegative(),
   totalPendingAmount: z.number().int().nonnegative(),
   totalRejectedAmount: z.number().int().nonnegative(),
 });
@@ -199,8 +252,13 @@ export const analyticsMemberRowSchema = z.object({
   email: z.email(),
   totalShares: z.number().int().nonnegative(),
   costBasis: z.number().int().nonnegative(),
-  currentValue: z.number().int().nonnegative(),
   currentPeriodStatus: periodStatusValueSchema.nullable(),
+  // This member's own period-by-period history — the same shape
+  // getMemberSummary returns for one member at a time, included here too
+  // so the report's "every member" table can drill into one member's
+  // history, and its "by month" table can pivot the same data the other
+  // way (every member's status for one period), without a second request.
+  periods: z.array(periodStatusSchema),
 });
 export type AnalyticsMemberRow = z.infer<typeof analyticsMemberRowSchema>;
 

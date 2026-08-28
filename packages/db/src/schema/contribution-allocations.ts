@@ -12,8 +12,13 @@ import { tenants } from './tenants.js';
 //
 // `sharePriceId` is resolved once, when this row is first created (the
 // share_prices row effective for `period` at that moment), and never
-// re-resolved afterward — a later correction to price history must not be
-// able to reach back and change what an already-recorded allocation meant.
+// re-resolved to a different row afterward — adding a new, later price
+// point never changes what an already-recorded allocation pins to. That
+// pinned row's own `amount` can still be corrected in place, though (see
+// ContributionsService.updateSharePrice) — a period's due amount is read
+// live from it, so such a correction intentionally does reach back and
+// change what any period pinned to it shows as due; the app warns about
+// that at the point of the edit rather than preventing it structurally.
 //
 // There is no separate "obligation" row to reference: a period's due
 // amount is simply the pinned share price's amount, and a period's status

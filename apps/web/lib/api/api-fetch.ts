@@ -68,12 +68,16 @@ async function refreshAccessToken(): Promise<boolean> {
 function buildRequest(path: string, options: ApiFetchOptions): Request {
   const { skipAuth, headers, ...rest } = options;
   const token = getAccessToken();
+  // A FormData body (a file upload) must never get an explicit
+  // Content-Type — the browser sets its own, with the multipart boundary
+  // the backend's parser needs, only when the header is left unset.
+  const isFormData = rest.body instanceof FormData;
 
   return new Request(`${env.NEXT_PUBLIC_API_URL}${path}`, {
     ...rest,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token && !skipAuth ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },

@@ -37,6 +37,7 @@ import {
 import * as argon2 from 'argon2';
 
 import { isUniqueViolation } from '../common/db-errors';
+import { todayIsoDate } from '../common/dates';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import type { Transaction } from '../db/types';
@@ -104,12 +105,14 @@ interface UserRow {
   email: string;
   passwordHash: string;
   emailVerifiedAt: Date | null;
+  claimedAt: Date | null;
 }
 
 interface TenantRow {
   id: string;
   name: string;
   slug: string;
+  onboardedAt: Date | null;
 }
 
 interface LoginTicketClaims {
@@ -135,7 +138,12 @@ export class AuthService {
         async (tx) => {
           const [user] = await tx
             .insert(users)
-            .values({ name: input.name, email: input.email, passwordHash })
+            .values({
+              name: input.name,
+              email: input.email,
+              passwordHash,
+              claimedAt: new Date(),
+            })
             .returning();
           const { tenant, membership } = await this.insertTenantAndMembership(
             tx,
@@ -179,7 +187,12 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member (see users.ts's claimedAt) has no real password
+    // — its hash is a random, discarded value nobody can know — so this
+    // would already fail below regardless; checked explicitly anyway
+    // rather than relying on that alone, and with the exact same generic
+    // message so it reveals nothing about the account's state.
+    if (!user || !user.claimedAt) {
       throw invalidCredentials();
     }
 
@@ -260,7 +273,11 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member's email is synthetic and known to nobody, so
+    // this path is never realistically reached for one — guarded anyway,
+    // and with the same silent return an unknown email gets, so it can
+    // never distinguish "no account" from "not claimed yet".
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -392,7 +409,8 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // Same reasoning as requestMagicLink above.
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -622,6 +640,19 @@ export class AuthService {
     return this.issueSession(user, tenant, membership.permissions);
   }
 
+  // Marks the active tenant's guided setup wizard done — the frontend
+  // gates the whole app behind this being non-null (see
+  // apps/web/app/(app)/layout.tsx). The `isNull` guard makes a repeat call
+  // a harmless no-op rather than an error, since "finish setup" is a
+  // button a founder could plausibly press twice (a slow network retry, a
+  // double click) without that being a real problem.
+  async completeOnboarding(tenantId: string): Promise<void> {
+    await this.db
+      .update(tenants)
+      .set({ onboardedAt: new Date() })
+      .where(and(eq(tenants.id, tenantId), isNull(tenants.onboardedAt)));
+  }
+
   async getCurrentSession(claims: AccessTokenClaims): Promise<CurrentSession> {
     const { tenant, user, membership } = await this.loadSessionContext(
       claims.sub,
@@ -638,7 +669,12 @@ export class AuthService {
         email: user.email,
         emailVerified: !!user.emailVerifiedAt,
       },
-      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+      },
       permissions: membership.permissions,
       cooperatives: await this.listCooperatives(user.id),
     };
@@ -720,6 +756,7 @@ export class AuthService {
               userId,
               tenantId: tenant.id,
               permissions: [PERMISSIONS.TENANT_ADMIN],
+              memberSince: todayIsoDate(),
             })
             .returning();
           return { tenant, membership };
@@ -966,7 +1003,12 @@ export class AuthService {
           email: user.email,
           emailVerified: !!user.emailVerifiedAt,
         },
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+        },
         permissions,
         cooperatives,
       },
