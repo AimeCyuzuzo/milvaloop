@@ -21,12 +21,12 @@ on:
 # the kind of concurrency bug CODE_QUALITY.md's "correct under
 # concurrency" bar exists to catch, generalized to deploys.
 concurrency:
-  group: deploy-production
+  group: milvaproducts
   cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: [self-hosted, milvaproducts]
+    runs-on: self-hosted
     # Scopes PRODUCTION_ENV to this job and, if configured in this repo's
     # Settings → Environments, lets a deploy require manual approval or
     # restrict which branch can trigger it — protection a plain repo
