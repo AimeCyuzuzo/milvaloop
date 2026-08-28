@@ -12,7 +12,6 @@ const CARDS: Array<{
   { label: 'Active members', key: 'activeMembers', format: (value) => String(value) },
   { label: 'Total shares outstanding', key: 'totalSharesOutstanding', format: (value) => String(value) },
   { label: 'Total contributed (cost basis)', key: 'totalCostBasis', format: formatAmount },
-  { label: "Total value at today's price", key: 'totalCurrentValue', format: formatAmount },
   { label: 'Pending approval', key: 'totalPendingAmount', format: formatAmount },
   { label: 'Rejected, all-time', key: 'totalRejectedAmount', format: formatAmount },
 ];

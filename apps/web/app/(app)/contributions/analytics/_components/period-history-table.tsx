@@ -1,14 +1,18 @@
-import type { AnalyticsPeriodRow } from '@milvaloop/types';
+import type { AnalyticsMemberRow, AnalyticsPeriodRow } from '@milvaloop/types';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@milvaloop/ui/table';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { formatPeriodLabel } from '@/lib/contributions/format-period';
 
+import { PeriodDetailDialog } from './period-detail-dialog';
+
 // Every period since the cooperative's first share price, oldest first —
 // unlike the dashboard's compliance-summary card, which only ever shows
 // the current month, this is the full compliance history at a glance.
-export function PeriodHistoryTable({ periods }: { periods: AnalyticsPeriodRow[] }) {
+// `members` is only needed for PeriodDetailDialog's own drill-down — this
+// table's own cells never read anything off it directly.
+export function PeriodHistoryTable({ periods, members }: { periods: AnalyticsPeriodRow[]; members: AnalyticsMemberRow[] }) {
   if (periods.length === 0) {
     return (
       <Typography variant="small" color="muted">
@@ -27,6 +31,7 @@ export function PeriodHistoryTable({ periods }: { periods: AnalyticsPeriodRow[] 
           <TableHead>Partial</TableHead>
           <TableHead>Due</TableHead>
           <TableHead>Overdue</TableHead>
+          <TableHead />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -38,6 +43,9 @@ export function PeriodHistoryTable({ periods }: { periods: AnalyticsPeriodRow[] 
             <TableCell>{period.partial}</TableCell>
             <TableCell>{period.due}</TableCell>
             <TableCell>{period.overdue}</TableCell>
+            <TableCell>
+              <PeriodDetailDialog period={period} members={members} />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

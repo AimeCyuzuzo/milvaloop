@@ -80,14 +80,14 @@ export default function ContributionsAnalyticsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <PeriodComplianceChart periods={analytics.periods} />
-          <PeriodHistoryTable periods={analytics.periods} />
+          <PeriodHistoryTable periods={analytics.periods} members={analytics.members} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle>Every member</CardTitle>
-          <CardDescription>Shares, cost basis, current value, and this month&rsquo;s status, side by side.</CardDescription>
+          <CardDescription>Shares, cost basis, and this month&rsquo;s status, side by side.</CardDescription>
         </CardHeader>
         <CardContent>
           <DataTable

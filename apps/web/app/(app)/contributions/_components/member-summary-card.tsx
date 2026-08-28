@@ -2,17 +2,17 @@
 
 import { useState } from 'react';
 
-import { Badge } from '@milvaloop/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { formatAmount, formatPeriodLabel } from '@/lib/contributions/format-period';
-import { PERIOD_STATUS_BADGE_VARIANT, PERIOD_STATUS_LABEL } from '@/lib/contributions/period-status-labels';
 import { useMemberSummaryQuery } from '@/lib/contributions/use-member-summary-query';
 import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
+
+import { PeriodStatusRows } from './period-status-rows';
 
 // Shares owned and monthly compliance are shown as two independent facts,
 // never folded into one number — someone can own many shares and still be
@@ -82,27 +82,15 @@ export function MemberSummaryCard() {
                 </Typography>
                 <Typography variant="large">{formatAmount(summary.costBasis)}</Typography>
               </div>
-              <div>
-                <Typography variant="small" color="muted">
-                  Value at today&rsquo;s price
-                </Typography>
-                <Typography variant="large">{formatAmount(summary.currentValue)}</Typography>
-              </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              {summary.periods.map((period) => (
-                <div key={period.period} className="flex flex-wrap items-center justify-between gap-2">
-                  <Typography variant="small">{formatPeriodLabel(period.period)}</Typography>
-                  <div className="flex items-center gap-2">
-                    <Typography variant="small" color="muted">
-                      {formatAmount(period.paidAmount)} / {formatAmount(period.dueAmount)}
-                    </Typography>
-                    <Badge variant={PERIOD_STATUS_BADGE_VARIANT[period.status]}>{PERIOD_STATUS_LABEL[period.status]}</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <PeriodStatusRows
+              rows={summary.periods.map((period) => ({
+                key: period.period,
+                label: formatPeriodLabel(period.period),
+                period,
+              }))}
+            />
           </div>
         )}
       </CardContent>
