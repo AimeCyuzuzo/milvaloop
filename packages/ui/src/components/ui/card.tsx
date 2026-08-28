@@ -45,10 +45,27 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div data-slot="card-title" className={cn('leading-none font-semibold', className)} {...props} />
-  );
+// `lg` exists for a card whose whole point is one headline number (a
+// dashboard stat, a count) — the default size reads fine as a section
+// label but disappears next to content meant to be the card's main point.
+const cardTitleVariants = cva('leading-none font-semibold', {
+  variants: {
+    size: {
+      default: '',
+      lg: 'text-2xl',
+    },
+  },
+  defaultVariants: {
+    size: 'default',
+  },
+});
+
+function CardTitle({
+  className,
+  size,
+  ...props
+}: React.ComponentProps<'div'> & VariantProps<typeof cardTitleVariants>) {
+  return <div data-slot="card-title" className={cn(cardTitleVariants({ size }), className)} {...props} />;
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {

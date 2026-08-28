@@ -6,30 +6,25 @@ when it came up as a real, scoped decision during actual work and was
 consciously pushed to later. Remove an item once it's done or once it's
 decided it won't be done.
 
-## Invites (cooperative membership invitations)
+## Member removal: reviewing what happens to a removed member's history
 
-An existing member of a cooperative inviting someone else to join it. Out of
-scope for the initial multi-cooperative auth rework, which only covers a user
-choosing among cooperatives they already belong to, or creating a brand-new
-one — not being added to someone else's.
+Removing a member is already a permission-gated soft delete
+(`MembersService.remove`, `memberships.removedAt`), and their historical
+contributions/allocations/audit entries stay intact and correctly
+tenant-scoped after removal — nothing about their past record is deleted or
+miscalculated. What's genuinely missing is discoverability: a removed member
+disappears from the Members list entirely, the only trace left is one
+plain-text Activity log line, and there's no page to look up a specific
+member's contribution history by id at all (not even your own, today — it's
+only ever embedded on the dashboard for the signed-in member).
 
-Expected shape when this is picked up:
-- A `membership_invites`-style table: `tenantId`, `email`, `permissions`
-  (the permissions the invite grants on acceptance), `invitedByUserId`, a
-  hashed single-use token, `expiresAt`, `consumedAt` — mirrors the existing
-  `magic_link_tokens`/`password_reset_tokens` pattern.
-- An authenticated, permission-gated endpoint for an existing member to
-  create an invite (sends an email with an accept link).
-- An accept-invite endpoint: if the invited email already has an account,
-  create the membership and finish however login normally finishes (see
-  `AuthService.finishLogin` — the same 1-cooperative/many-cooperatives
-  branching applies once the new membership exists); if it doesn't, the
-  accept flow needs to also collect a password and create the user.
-- The natural place to surface pending invites in the frontend is the
-  `selection_required`/`no_cooperatives` states on the login and
-  magic-link-consume pages — someone with a pending invite sees it
-  alongside their existing cooperatives / the create-first-cooperative
-  form, not on a separate screen.
+Deliberately not picked up yet: what removal should actually mean for a real
+cooperative — their outstanding shares, whether contribution history should
+stay visible to everyone or only admins, whether removal should be
+reversible — is a product question that depends on how different
+cooperatives want to handle a member leaving, not something to decide
+unilaterally. Revisit once there's real input from more than one group on
+what they'd expect here.
 
 ## Redis-backed rate-limiter storage
 
@@ -51,6 +46,21 @@ definition, but nothing enforces they stay in sync if one changes.
 removing that duplication. Not adopted yet because the current schemas are
 small and the drift risk is low; worth it once `packages/db`'s schema grows
 enough that keeping the two in sync by hand becomes error-prone.
+
+## e2e test suite flakiness under Jest's default parallel workers
+
+`pnpm test:e2e` runs every `*.e2e-spec.ts` file as its own Jest worker in
+parallel, each spinning up a full NestJS app and its own Postgres
+connection pool against `createTestDatabase()`. With seven spec files (as
+of the audit-events addition), this intermittently produces spurious
+failures unrelated to the code under test — `socket hang up`, and
+requests that unexpectedly get a 403 instead of a 201 — that don't
+reproduce when the same suite is run serially (`jest --runInBand`), which
+passes cleanly and deterministically every time. This points to
+connection-pool/resource contention across the concurrent workers, not a
+real regression. Revisit if it gets worse as more e2e spec files are
+added — either cap Jest's worker count for this project, or pool
+connections more conservatively per test file.
 
 ## Per-page `<title>`s for auth/app pages
 

@@ -49,6 +49,7 @@ describe('Cooperatives (e2e)', () => {
   // generated from tenantName now, never client-supplied.
   const FOUNDER = {
     tenantName: 'Ikimina Test',
+    name: 'Founder Person',
     email: 'founder@example.com',
     password: 'correct-horse-battery',
   };

@@ -8,10 +8,14 @@ import {
 } from '@milvaloop/db/testing';
 import type {
   AuthSession,
+  InviteLookupResult,
+  MemberImportPreview,
+  MemberImportResult,
   MemberListResponse,
   PendingInvite,
 } from '@milvaloop/types';
 import cookieParser from 'cookie-parser';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 
@@ -29,6 +33,20 @@ import { createFakeMailer } from './fakes/fake-mailer';
 
 function bodyAs<T>(response: request.Response): T {
   return response.body as T;
+}
+
+async function buildMemberSheet(
+  headers: string[],
+  rows: string[][],
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Members');
+  sheet.addRow(headers);
+  for (const row of rows) {
+    sheet.addRow(row);
+  }
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // Invite emails link to the accept page with the raw token in the query
@@ -65,6 +83,7 @@ describe('Members (e2e)', () => {
 
   const FOUNDER = {
     tenantName: 'Members Test Coop',
+    name: 'Founder Person',
     email: 'founder@example.com',
     password: 'correct-horse-battery',
   };
@@ -89,7 +108,7 @@ describe('Members (e2e)', () => {
     const token = extractInviteToken(sentEmails, email);
     const response = await request(app.getHttpServer())
       .post('/members/invites/accept')
-      .send({ token, password: PASSWORD });
+      .send({ token, name: 'Invited Member', password: PASSWORD });
     return bodyAs<AuthSession>(response);
   }
 
@@ -168,6 +187,10 @@ describe('Members (e2e)', () => {
         }),
       );
     });
+
+    // A removed member staying visible with status 'removed' is covered by
+    // DELETE /members/:membershipId's own test below, which is the more
+    // natural place for "what does removal actually do".
 
     it('rejects an unauthenticated request', async () => {
       const response = await request(app.getHttpServer()).get('/members');
@@ -261,7 +284,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'New Person', password: PASSWORD });
 
       expect(response.status).toBe(200);
       const session = bodyAs<AuthSession & { status: string }>(response);
@@ -280,6 +303,7 @@ describe('Members (e2e)', () => {
       await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'second@example.com',
         password: PASSWORD,
       };
@@ -296,7 +320,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Founder Person', password: PASSWORD });
 
       expect(response.status).toBe(409);
     });
@@ -318,7 +342,7 @@ describe('Members (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token });
+        .send({ token, name: 'No Password' });
       expect(response.status).toBe(400);
     });
 
@@ -332,12 +356,12 @@ describe('Members (e2e)', () => {
 
       const first = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Once Only', password: PASSWORD });
       expect(first.status).toBe(200);
 
       const second = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Once Only', password: PASSWORD });
       expect(second.status).toBe(400);
     });
   });
@@ -361,6 +385,8 @@ describe('Members (e2e)', () => {
         email: 'lookup-new@example.com',
         tenantName: FOUNDER.tenantName,
         hasAccount: false,
+        isClaim: false,
+        claimName: null,
       });
     });
 
@@ -368,6 +394,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'lookup-existing@example.com',
         password: PASSWORD,
       };
@@ -403,7 +430,7 @@ describe('Members (e2e)', () => {
       );
       await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Consumed Invite', password: PASSWORD });
 
       const response = await request(app.getHttpServer())
         .get('/members/invites/lookup')
@@ -427,6 +454,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'joiner@example.com',
         password: PASSWORD,
       };
@@ -461,6 +489,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const other = {
         tenantName: 'Other Coop',
+        name: 'Other Person',
         email: 'notinvited@example.com',
         password: PASSWORD,
       };
@@ -505,6 +534,7 @@ describe('Members (e2e)', () => {
       const founder = await signupFounder();
       const secondFounder = {
         tenantName: 'Second Coop',
+        name: 'Second Founder',
         email: 'usedjoin@example.com',
         password: PASSWORD,
       };
@@ -549,7 +579,7 @@ describe('Members (e2e)', () => {
 
       const acceptResponse = await request(app.getHttpServer())
         .post('/members/invites/accept')
-        .send({ token, password: PASSWORD });
+        .send({ token, name: 'Revoke Me', password: PASSWORD });
       expect(acceptResponse.status).toBe(400);
     });
 
@@ -649,8 +679,113 @@ describe('Members (e2e)', () => {
     });
   });
 
+  describe('PATCH /members/:membershipId/reminders', () => {
+    async function activeMember(token: string, email: string) {
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${token}`);
+      const member = bodyAs<MemberListResponse>(list).members.find(
+        (candidate) =>
+          candidate.status === 'active' && candidate.email === email,
+      );
+      if (!member || member.status !== 'active') {
+        throw new Error(`Expected an active member with email ${email}`);
+      }
+      return member;
+    }
+
+    it('pauses and resumes your own reminders, reflected back in the member list', async () => {
+      const founder = await signupFounder();
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'pauseme@example.com',
+        [],
+      );
+      const target = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(target.remindersPausedAt).toBeNull();
+
+      const pauseResponse = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: true });
+      expect(pauseResponse.status).toBe(204);
+
+      const paused = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(paused.remindersPausedAt).not.toBeNull();
+
+      const resumeResponse = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: false });
+      expect(resumeResponse.status).toBe(204);
+
+      const resumed = await activeMember(
+        founder.accessToken,
+        'pauseme@example.com',
+      );
+      expect(resumed.remindersPausedAt).toBeNull();
+    });
+
+    it('is a no-op when already in the requested state', async () => {
+      const founder = await signupFounder();
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'alreadyactive@example.com',
+        [],
+      );
+      const target = await activeMember(
+        founder.accessToken,
+        'alreadyactive@example.com',
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ paused: false });
+      expect(response.status).toBe(204);
+    });
+
+    it("rejects pausing someone else's reminders, even as tenant:admin", async () => {
+      const founder = await signupFounder();
+      await inviteAndAccept(founder.accessToken, 'notmine@example.com', []);
+      const target = await activeMember(
+        founder.accessToken,
+        'notmine@example.com',
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch(`/members/${target.membershipId}/reminders`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ paused: true });
+      expect(response.status).toBe(403);
+
+      // Confirms this wasn't silently a no-op that happened to return 403
+      // for an unrelated reason — the target's state genuinely didn't move.
+      const unchanged = await activeMember(
+        founder.accessToken,
+        'notmine@example.com',
+      );
+      expect(unchanged.remindersPausedAt).toBeNull();
+    });
+
+    it('returns 404 for a membership that does not exist', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .patch('/members/00000000-0000-4000-8000-000000000000/reminders')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ paused: true });
+      expect(response.status).toBe(404);
+    });
+  });
+
   describe('DELETE /members/:membershipId', () => {
-    it('soft-removes a member so they no longer appear in the list', async () => {
+    it('soft-removes a member, who stays visible in the list with status "removed"', async () => {
       const founder = await signupFounder();
       await inviteAndAccept(founder.accessToken, 'removeme@example.com', []);
       const list = await request(app.getHttpServer())
@@ -671,7 +806,41 @@ describe('Members (e2e)', () => {
       const updatedList = await request(app.getHttpServer())
         .get('/members')
         .set('Authorization', `Bearer ${founder.accessToken}`);
-      expect(bodyAs<MemberListResponse>(updatedList).members).toHaveLength(1);
+      const updatedMembers = bodyAs<MemberListResponse>(updatedList).members;
+      expect(updatedMembers).toHaveLength(2);
+      expect(updatedMembers).toContainEqual(
+        expect.objectContaining({
+          status: 'removed',
+          membershipId: target.membershipId,
+          email: 'removeme@example.com',
+        }),
+      );
+    });
+
+    it('emails the removed member, naming who removed them and the cooperative', async () => {
+      const founder = await signupFounder();
+      await inviteAndAccept(founder.accessToken, 'removeme2@example.com', []);
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const target = bodyAs<MemberListResponse>(list).members.find(
+        (m) => m.status === 'active' && m.email === 'removeme2@example.com',
+      );
+      if (!target || target.status !== 'active') {
+        throw new Error('Expected member not found');
+      }
+
+      await request(app.getHttpServer())
+        .delete(`/members/${target.membershipId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      // Both the invite and the removal email went to the same address —
+      // the invite arrived first, so the removal is the latest one.
+      const removalEmail = [...sentEmails]
+        .reverse()
+        .find((email) => email.to === 'removeme2@example.com');
+      expect(removalEmail?.subject).toContain('removed from');
+      expect(removalEmail?.html).toContain(FOUNDER.name);
     });
 
     it('blocks removing the only remaining admin', async () => {
@@ -695,6 +864,242 @@ describe('Members (e2e)', () => {
         .delete('/members/00000000-0000-4000-8000-000000000000')
         .set('Authorization', `Bearer ${founder.accessToken}`);
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('POST /members/placeholder', () => {
+    it('adds a member with no login, backdated to a real join date', async () => {
+      const founder = await signupFounder();
+
+      const response = await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ name: 'Beata Uwase', memberSince: '2023-01-01' });
+      expect(response.status).toBe(201);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          status: 'active',
+          name: 'Beata Uwase',
+          hasLogin: false,
+          memberSince: '2023-01-01',
+        }),
+      );
+    });
+
+    it('rejects an empty name', async () => {
+      const founder = await signupFounder();
+      const response = await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ name: '', memberSince: '2023-01-01' });
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe("claiming a placeholder member's login", () => {
+    async function addPlaceholder(
+      founderAccessToken: string,
+      name: string,
+    ): Promise<string> {
+      await request(app.getHttpServer())
+        .post('/members/placeholder')
+        .set('Authorization', `Bearer ${founderAccessToken}`)
+        .send({ name, memberSince: '2023-01-01' });
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founderAccessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      const placeholder = members.find(
+        (member) => member.status === 'active' && member.name === name,
+      );
+      if (!placeholder || placeholder.status !== 'active') {
+        throw new Error('Placeholder member was not created');
+      }
+      return placeholder.membershipId;
+    }
+
+    it('lets the claimant set a name and password without disturbing their membership', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'Beata Uwase',
+      );
+
+      const inviteResponse = await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'beata@example.com' });
+      expect(inviteResponse.status).toBe(201);
+
+      const token = extractInviteToken(sentEmails, 'beata@example.com');
+      const lookup = await request(app.getHttpServer())
+        .get('/members/invites/lookup')
+        .query({ token });
+      expect(bodyAs<InviteLookupResult>(lookup)).toMatchObject({
+        status: 'pending',
+        isClaim: true,
+        claimName: 'Beata Uwase',
+      });
+
+      const acceptResponse = await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'Beata M. Uwase', password: PASSWORD });
+      expect(acceptResponse.status).toBe(200);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          membershipId,
+          name: 'Beata M. Uwase',
+          email: 'beata@example.com',
+          hasLogin: true,
+          memberSince: '2023-01-01',
+        }),
+      );
+    });
+
+    it('rejects a second login invite for an already-claimed member', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'David Removed',
+      );
+      await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'david@example.com' });
+      const token = extractInviteToken(sentEmails, 'david@example.com');
+      await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'David Removed', password: PASSWORD });
+
+      const response = await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: 'david-again@example.com' });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects claiming into an email that already has a MilvaLoop account', async () => {
+      const founder = await signupFounder();
+      const membershipId = await addPlaceholder(
+        founder.accessToken,
+        'Chantal Admin',
+      );
+      await request(app.getHttpServer())
+        .post(`/members/${membershipId}/invite-login`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ email: FOUNDER.email });
+
+      const token = extractInviteToken(sentEmails, FOUNDER.email);
+      const response = await request(app.getHttpServer())
+        .post('/members/invites/accept')
+        .send({ token, name: 'Chantal Admin', password: PASSWORD });
+      expect(response.status).toBe(409);
+    });
+  });
+
+  describe('POST /members/import', () => {
+    it("previews a spreadsheet's columns and a sample of its rows", async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['First', 'Last', 'Email'],
+        [['Aime', 'Cyuzuzo', 'aime@example.com']],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import/preview')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      const preview = bodyAs<MemberImportPreview>(response);
+      expect(preview.columns).toEqual(['First', 'Last', 'Email']);
+      expect(preview.sampleRows).toEqual([
+        ['Aime', 'Cyuzuzo', 'aime@example.com'],
+      ]);
+    });
+
+    it('invites rows with an email, adds rows without one, and skips a row with no name', async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['Name', 'Email'],
+        [
+          ['Aime Cyuzuzo', 'aime@example.com'],
+          ['Beata Uwase', ''],
+          ['', ''],
+        ],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .field(
+          'mapping',
+          JSON.stringify({
+            nameColumns: [0],
+            emailColumn: 1,
+            memberSince: '2023-01-01',
+          }),
+        )
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      const { rows } = bodyAs<MemberImportResult>(response);
+      expect(rows).toEqual([
+        {
+          outcome: 'invited',
+          row: 2,
+          name: 'Aime Cyuzuzo',
+          email: 'aime@example.com',
+        },
+        { outcome: 'added', row: 3, name: 'Beata Uwase' },
+        { outcome: 'skipped', row: 4, reason: 'No name found in this row' },
+      ]);
+
+      const list = await request(app.getHttpServer())
+        .get('/members')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { members } = bodyAs<MemberListResponse>(list);
+      expect(members).toContainEqual(
+        expect.objectContaining({
+          status: 'invited',
+          email: 'aime@example.com',
+        }),
+      );
+      expect(members).toContainEqual(
+        expect.objectContaining({ name: 'Beata Uwase', hasLogin: false }),
+      );
+    });
+
+    it('combines two name columns with a space', async () => {
+      const founder = await signupFounder();
+      const file = await buildMemberSheet(
+        ['First', 'Last'],
+        [['Aime', 'Cyuzuzo']],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/members/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .field(
+          'mapping',
+          JSON.stringify({ nameColumns: [0, 1], memberSince: '2023-01-01' }),
+        )
+        .attach('file', file, 'members.xlsx');
+
+      expect(response.status).toBe(200);
+      expect(bodyAs<MemberImportResult>(response).rows).toEqual([
+        { outcome: 'added', row: 2, name: 'Aime Cyuzuzo' },
+      ]);
     });
   });
 });

@@ -14,7 +14,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@milvaloop/ui/sidebar';
-import { Typography } from '@milvaloop/ui/typography';
 
 import { AccountMenu } from './account-menu';
 import { CooperativeSwitcher } from './cooperative-switcher';
@@ -24,30 +23,36 @@ export function AppSidebar({
   tenantId,
   tenantName,
   cooperatives,
-  email,
+  name,
 }: {
   tenantId: string;
   tenantName: string;
   cooperatives: CooperativeSummary[];
-  email: string;
+  name: string;
 }) {
   const pathname = usePathname();
   const navItems = useVisibleNavItems();
 
+  // More than one item's href can prefix-match the same pathname (e.g.
+  // /contributions/analytics starts with both /contributions and
+  // /contributions/analytics) — only the longest, most specific match
+  // should light up, or a parent and its own sub-page would highlight
+  // together.
+  const activeHref = navItems
+    .map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <Sidebar>
       <SidebarHeader>
-        {cooperatives.length > 1 ? (
-          <CooperativeSwitcher currentTenantId={tenantId} cooperatives={cooperatives} />
-        ) : (
-          <Typography variant="large">{tenantName}</Typography>
-        )}
+        <CooperativeSwitcher currentTenantId={tenantId} currentTenantName={tenantName} cooperatives={cooperatives} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
             {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = item.href === activeHref;
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive}>
@@ -63,7 +68,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <AccountMenu email={email} />
+        <AccountMenu name={name} />
       </SidebarFooter>
     </Sidebar>
   );

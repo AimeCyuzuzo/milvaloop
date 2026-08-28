@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Query,
   Req,
@@ -12,6 +14,7 @@ import { Throttle } from '@nestjs/throttler';
 import {
   createCooperativeSchema,
   slugPreviewQuerySchema,
+  PERMISSIONS,
   type CreateCooperativeInput,
   type SlugPreviewQuery,
 } from '@milvaloop/types';
@@ -20,7 +23,9 @@ import type { Request, Response } from 'express';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/auth.guard';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { PermissionsGuard } from '../auth/permissions.guard';
 import { readRefreshCookie, setRefreshCookie } from '../auth/refresh-cookie';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 // An already-authenticated user creating a brand-new cooperative. Distinct
@@ -50,6 +55,17 @@ export class CooperativesController {
       );
     setRefreshCookie(res, refreshToken, refreshTokenExpiresAt);
     return session;
+  }
+
+  // Marks the active tenant's guided setup wizard done (see
+  // apps/web/app/(app)/onboarding) — only its founder/admin can finish
+  // setup on behalf of the whole cooperative.
+  @Post('complete-onboarding')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.TENANT_ADMIN)
+  async completeOnboarding(@CurrentUser() claims: AccessTokenClaims) {
+    await this.authService.completeOnboarding(claims.tenantId);
   }
 
   // Public — shows a live "this will be created at ___" preview as the user

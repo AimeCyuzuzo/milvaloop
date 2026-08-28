@@ -4,6 +4,11 @@ import { cooperativeNameSchema, cooperativeSummarySchema } from './tenant.js';
 
 const emailSchema = z.email();
 export const passwordSchema = z.string().min(8, 'Password must be at least 8 characters');
+// A person's real name, shown everywhere an account's identity is
+// displayed instead of the email — every account has one, since email is
+// a login credential, not something you'd want to see in a member list or
+// an activity feed.
+export const personNameSchema = z.string().min(1).max(255);
 
 // Founder signup: creates a user, a tenant, and the founding membership
 // together (see CODE_QUALITY.md's transaction example). No slug field — the
@@ -11,6 +16,7 @@ export const passwordSchema = z.string().min(8, 'Password must be at least 8 cha
 // tenant.ts's slugify and AuthService.insertTenantAndMembership).
 export const signupSchema = z.object({
   tenantName: cooperativeNameSchema,
+  name: personNameSchema,
   email: emailSchema,
   password: passwordSchema,
 });
@@ -59,6 +65,14 @@ export const changePasswordSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+// PATCH /auth/profile — a person's own name, editable independently of
+// their password (see AuthController). No currentPassword check here,
+// unlike changePasswordSchema — a display name isn't a security credential.
+export const updateProfileSchema = z.object({
+  name: personNameSchema,
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
 // Returned by signup, refresh, and every endpoint that finishes resolving
 // a specific cooperative (select/switch/create). The refresh token itself
 // is never in this body — it's set as an httpOnly cookie.
@@ -66,6 +80,7 @@ export const authSessionSchema = z.object({
   accessToken: z.string(),
   user: z.object({
     id: z.uuid(),
+    name: z.string(),
     email: z.email(),
     emailVerified: z.boolean(),
   }),
@@ -73,6 +88,11 @@ export const authSessionSchema = z.object({
     id: z.uuid(),
     name: z.string(),
     slug: z.string(),
+    // Null until this cooperative's founder finishes (or skips) the
+    // guided setup wizard — the frontend redirects into it whenever this
+    // is null rather than showing the normal dashboard (see
+    // apps/web/app/(app)/layout.tsx).
+    onboardedAt: z.iso.datetime().nullable(),
   }),
   permissions: z.array(z.string()),
   // Every cooperative this user holds a membership in, not just the

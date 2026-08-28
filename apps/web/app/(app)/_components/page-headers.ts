@@ -11,10 +11,17 @@ export interface PageHeader {
 // for every new page; one not listed just renders no title (a plain
 // SidebarTrigger row), not a crash.
 const PAGE_HEADERS: Record<string, PageHeader> = {
+  '/onboarding': { title: 'Set up your cooperative', description: 'A few things to get right before you start.' },
   '/dashboard': { title: 'Overview', description: 'A quick look at your cooperative.' },
   '/members': { title: 'Members', description: 'Who has access to this cooperative, and what they can do.' },
+  '/members/import': { title: 'Import members', description: 'Add a member list from a spreadsheet.' },
+  '/contributions': { title: 'Contributions', description: 'Shares, monthly contributions, and approvals.' },
+  '/contributions/import': { title: 'Import history', description: 'Bring in contributions from before this cooperative used MilvaLoop.' },
+  '/contributions/analytics': { title: 'Analytics', description: 'Every number the ledger can produce, in one place.' },
+  '/activity': { title: 'Activity', description: 'Everything that has happened in this cooperative.' },
+  '/settings': { title: 'Settings', description: 'Manage the share price.' },
   '/account': { title: 'Account', description: 'Manage your account settings.' },
-  '/cooperatives/new': { title: 'Add a cooperative', description: 'Set up a new cooperative under your existing account.' },
+  '/cooperatives/new': { title: 'Create a cooperative', description: 'Set up a new cooperative under your existing account.' },
 };
 
 export function usePageHeader(): PageHeader | undefined {

@@ -43,3 +43,6 @@ next-env.d.ts
 
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
+
+# Playwright MCP debug output (screenshots, console logs)
+.playwright-mcp/

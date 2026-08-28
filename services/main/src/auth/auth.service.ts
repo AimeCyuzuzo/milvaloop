@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { and, eq, gt, schema, type Database } from '@milvaloop/db';
+import { and, eq, gt, isNull, schema, type Database } from '@milvaloop/db';
 import {
   EmailVerificationEmail,
   MagicLinkEmail,
@@ -32,10 +32,12 @@ import {
   type SignupInput,
   type SlugPreviewResult,
   type SwitchCooperativeInput,
+  type UpdateProfileInput,
 } from '@milvaloop/types';
 import * as argon2 from 'argon2';
 
 import { isUniqueViolation } from '../common/db-errors';
+import { todayIsoDate } from '../common/dates';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import type { Transaction } from '../db/types';
@@ -99,15 +101,18 @@ export type LoginOutcome =
 
 interface UserRow {
   id: string;
+  name: string;
   email: string;
   passwordHash: string;
   emailVerifiedAt: Date | null;
+  claimedAt: Date | null;
 }
 
 interface TenantRow {
   id: string;
   name: string;
   slug: string;
+  onboardedAt: Date | null;
 }
 
 interface LoginTicketClaims {
@@ -133,7 +138,12 @@ export class AuthService {
         async (tx) => {
           const [user] = await tx
             .insert(users)
-            .values({ email: input.email, passwordHash })
+            .values({
+              name: input.name,
+              email: input.email,
+              passwordHash,
+              claimedAt: new Date(),
+            })
             .returning();
           const { tenant, membership } = await this.insertTenantAndMembership(
             tx,
@@ -177,7 +187,12 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member (see users.ts's claimedAt) has no real password
+    // — its hash is a random, discarded value nobody can know — so this
+    // would already fail below regardless; checked explicitly anyway
+    // rather than relying on that alone, and with the exact same generic
+    // message so it reveals nothing about the account's state.
+    if (!user || !user.claimedAt) {
       throw invalidCredentials();
     }
 
@@ -258,7 +273,11 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member's email is synthetic and known to nobody, so
+    // this path is never realistically reached for one — guarded anyway,
+    // and with the same silent return an unknown email gets, so it can
+    // never distinguish "no account" from "not claimed yet".
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -390,7 +409,8 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // Same reasoning as requestMagicLink above.
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -503,6 +523,19 @@ export class AuthService {
     await this.revokeAllSessions(user.id);
   }
 
+  // A display name is a low-stakes profile field, not a security
+  // credential — no current-value confirmation needed the way a password
+  // change requires one, and it doesn't revoke other sessions.
+  async updateProfile(
+    claims: AccessTokenClaims,
+    input: UpdateProfileInput,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ name: input.name })
+      .where(eq(users.id, claims.sub));
+  }
+
   async selectCooperative(
     input: SelectCooperativeInput,
   ): Promise<IssuedSession> {
@@ -519,6 +552,7 @@ export class AuthService {
         and(
           eq(memberships.userId, userId),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -569,6 +603,7 @@ export class AuthService {
         and(
           eq(memberships.userId, claims.sub),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -605,6 +640,19 @@ export class AuthService {
     return this.issueSession(user, tenant, membership.permissions);
   }
 
+  // Marks the active tenant's guided setup wizard done — the frontend
+  // gates the whole app behind this being non-null (see
+  // apps/web/app/(app)/layout.tsx). The `isNull` guard makes a repeat call
+  // a harmless no-op rather than an error, since "finish setup" is a
+  // button a founder could plausibly press twice (a slow network retry, a
+  // double click) without that being a real problem.
+  async completeOnboarding(tenantId: string): Promise<void> {
+    await this.db
+      .update(tenants)
+      .set({ onboardedAt: new Date() })
+      .where(and(eq(tenants.id, tenantId), isNull(tenants.onboardedAt)));
+  }
+
   async getCurrentSession(claims: AccessTokenClaims): Promise<CurrentSession> {
     const { tenant, user, membership } = await this.loadSessionContext(
       claims.sub,
@@ -617,10 +665,16 @@ export class AuthService {
     return {
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
         emailVerified: !!user.emailVerifiedAt,
       },
-      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+      },
       permissions: membership.permissions,
       cooperatives: await this.listCooperatives(user.id),
     };
@@ -638,7 +692,9 @@ export class AuthService {
       .select({ tenant: tenants, membership: memberships })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, user.id));
+      .where(
+        and(eq(memberships.userId, user.id), isNull(memberships.removedAt)),
+      );
 
     if (rows.length === 1) {
       const { tenant, membership } = rows[0];
@@ -700,6 +756,7 @@ export class AuthService {
               userId,
               tenantId: tenant.id,
               permissions: [PERMISSIONS.TENANT_ADMIN],
+              memberSince: todayIsoDate(),
             })
             .returning();
           return { tenant, membership };
@@ -755,7 +812,9 @@ export class AuthService {
       .select({ tenant: tenants })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, userId));
+      .where(
+        and(eq(memberships.userId, userId), isNull(memberships.removedAt)),
+      );
     return rows.map(({ tenant }) => ({
       id: tenant.id,
       name: tenant.name,
@@ -844,6 +903,13 @@ export class AuthService {
     });
   }
 
+  // Backs refresh() and getCurrentSession() — the two places a session
+  // gets re-validated after it was first issued. Filtering removedAt here
+  // (not just at login) is what actually makes removal take effect for
+  // someone already signed in: their session keeps working off its
+  // current access token until that expires, then the next refresh (or
+  // the next GET /auth/me) finds no active membership and ends it, the
+  // same way an already-revoked session or a deleted account does.
   private async loadSessionContext(userId: string, tenantId: string) {
     const [tenant] = await this.db
       .select()
@@ -859,7 +925,11 @@ export class AuthService {
       .select()
       .from(memberships)
       .where(
-        and(eq(memberships.userId, userId), eq(memberships.tenantId, tenantId)),
+        and(
+          eq(memberships.userId, userId),
+          eq(memberships.tenantId, tenantId),
+          isNull(memberships.removedAt),
+        ),
       )
       .limit(1);
 
@@ -929,10 +999,16 @@ export class AuthService {
         accessToken,
         user: {
           id: user.id,
+          name: user.name,
           email: user.email,
           emailVerified: !!user.emailVerifiedAt,
         },
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+        },
         permissions,
         cooperatives,
       },

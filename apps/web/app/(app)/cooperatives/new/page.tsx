@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createCooperativeSchema, type CreateCooperativeInput } from '@milvaloop/types';
@@ -21,7 +20,6 @@ import { useCreateCooperativeMutation } from '@/lib/auth/use-auth-mutations';
 // login-time create-first-cooperative flow (this account already has at
 // least one membership).
 export default function NewCooperativePage() {
-  const router = useRouter();
   const createCooperative = useCreateCooperativeMutation();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -34,7 +32,10 @@ export default function NewCooperativePage() {
     setFormError(null);
     try {
       await createCooperative.mutateAsync(values);
-      router.push('/dashboard');
+      // A full reload, not router.push — see CooperativeSwitcher's identical
+      // reasoning. This account just gained a brand-new tenant context;
+      // nothing already mounted (nav, any cached query) should carry over.
+      window.location.href = '/dashboard';
     } catch (error) {
       const message = applyServerError(form, error);
       if (message) {
@@ -47,7 +48,7 @@ export default function NewCooperativePage() {
     <div className="mx-auto w-full max-w-2xl">
       <Card>
         <CardHeader>
-          <CardTitle>Add a cooperative</CardTitle>
+          <CardTitle>Create a cooperative</CardTitle>
           <CardDescription>Set up a new cooperative under your existing account.</CardDescription>
         </CardHeader>
         <CardContent>

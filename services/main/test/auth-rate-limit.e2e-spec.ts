@@ -60,6 +60,7 @@ describe('Auth rate limiting (e2e)', () => {
         .post('/auth/signup')
         .send({
           tenantName: `Rate Limit Coop ${i}`,
+          name: 'Founder Person',
           email: `founder-${i}@example.com`,
           password: 'correct-horse-battery',
         });
@@ -68,6 +69,7 @@ describe('Auth rate limiting (e2e)', () => {
 
     const sixth = await request(app.getHttpServer()).post('/auth/signup').send({
       tenantName: 'Rate Limit Coop 6',
+      name: 'Founder Person',
       email: 'founder-6@example.com',
       password: 'correct-horse-battery',
     });

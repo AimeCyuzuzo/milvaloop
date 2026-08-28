@@ -16,7 +16,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@milvaloop/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
@@ -27,8 +26,7 @@ import { useInviteMemberMutation } from '@/lib/members/use-members-mutations';
 
 import { PERMISSION_LABELS } from './permission-labels';
 
-export function InviteMemberDialog() {
-  const [open, setOpen] = useState(false);
+export function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [formError, setFormError] = useState<string | null>(null);
   const invite = useInviteMemberMutation();
 
@@ -42,7 +40,7 @@ export function InviteMemberDialog() {
     try {
       await invite.mutateAsync(values);
       toast.success(`Invite sent to ${values.email}.`);
-      setOpen(false);
+      onOpenChange(false);
       form.reset();
     } catch (error) {
       const message = applyServerError(form, error);
@@ -56,16 +54,13 @@ export function InviteMemberDialog() {
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        setOpen(next);
+        onOpenChange(next);
         if (!next) {
           setFormError(null);
           form.reset();
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button>Invite member</Button>
-      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite a member</DialogTitle>

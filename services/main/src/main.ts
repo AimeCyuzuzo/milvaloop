@@ -6,7 +6,16 @@ import { env } from './config/env';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.enableCors({ origin: env.WEB_ORIGIN, credentials: true });
+  // Content-Disposition isn't on the CORS-safelisted response header list,
+  // so without this a cross-origin fetch() (the web app is a different
+  // origin from this API even in local dev) can't read the filename an
+  // export endpoint names its file — see ExportService/StreamableFile
+  // responses and apps/web/lib/api/api-fetch.ts's apiFetchBlob.
+  app.enableCors({
+    origin: env.WEB_ORIGIN,
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'],
+  });
   app.use(cookieParser());
 
   if (env.NODE_ENV === 'production') {

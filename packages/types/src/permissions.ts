@@ -11,6 +11,9 @@ export const PERMISSIONS = {
   MEMBERS_INVITE: 'members:invite',
   MEMBERS_EDIT: 'members:edit',
   MEMBERS_REMOVE: 'members:remove',
+  CONTRIBUTIONS_RECORD: 'contributions:record',
+  CONTRIBUTIONS_APPROVE: 'contributions:approve',
+  CONTRIBUTIONS_SETTINGS: 'contributions:settings',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

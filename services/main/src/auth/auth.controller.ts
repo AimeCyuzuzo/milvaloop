@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -23,6 +24,7 @@ import {
   selectCooperativeSchema,
   signupSchema,
   switchCooperativeSchema,
+  updateProfileSchema,
   type ChangePasswordInput,
   type CreateFirstCooperativeInput,
   type EmailVerificationConsumeInput,
@@ -35,6 +37,7 @@ import {
   type SelectCooperativeInput,
   type SignupInput,
   type SwitchCooperativeInput,
+  type UpdateProfileInput,
 } from '@milvaloop/types';
 import type { Request, Response } from 'express';
 
@@ -202,6 +205,16 @@ export class AuthController {
   ) {
     await this.authService.changePassword(claims, body);
     return { message: 'Password changed.' };
+  }
+
+  @Patch('profile')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  async updateProfile(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Body(new ZodValidationPipe(updateProfileSchema)) body: UpdateProfileInput,
+  ) {
+    await this.authService.updateProfile(claims, body);
   }
 
   // Finishes a 'selection_required' login — no guard, the ticket itself is
