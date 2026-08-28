@@ -18,6 +18,15 @@ export const serverEnvSchema = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_FROM: z.string().min(1).default('MilvaLoop <no-reply@milvaloop.local>'),
+  // Mailpit needs neither (dev-only, no real mail server behind it) — every
+  // real SMTP provider does, so these stay optional rather than required,
+  // and the mailer only authenticates when both are actually set.
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  // Implicit TLS (port 465) vs. STARTTLS (587, negotiated after connecting
+  // in plaintext) — nodemailer's own `secure` flag distinguishes them, and
+  // most providers (Resend included) expect STARTTLS, hence the default.
+  SMTP_SECURE: z.coerce.boolean().default(false),
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),

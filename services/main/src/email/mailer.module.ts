@@ -15,6 +15,10 @@ export const MAILER = Symbol('MAILER');
           host: env.SMTP_HOST,
           port: env.SMTP_PORT,
           from: env.SMTP_FROM,
+          secure: env.SMTP_SECURE,
+          ...(env.SMTP_USER && env.SMTP_PASSWORD
+            ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } }
+            : {}),
         }),
     },
   ],

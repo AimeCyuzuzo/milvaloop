@@ -12,6 +12,9 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+# Scratch copy of the production env, filled in locally before pasting
+# into the PRODUCTION_ENV GitHub secret — see docs/DEPLOYMENT.md.
+.env.prod
 
 # Testing
 coverage
