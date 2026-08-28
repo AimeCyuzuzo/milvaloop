@@ -1,0 +1,124 @@
+# Production topology (see docs/DEPLOYMENT.md's "Target production
+# topology"). Separate from docker-compose.yml, which is local-dev-only
+# (`pnpm docker:dev`) and never used here — keeping them apart means
+# nothing about a production change can accidentally touch local dev.
+#
+# Run from the repo root on the VPS, where a real `.env` (production
+# secrets, never the .env.example placeholders) already exists:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# No reverse proxy or TLS termination here yet — see DEPLOYMENT.md, that's
+# still an open step before any real cooperative's data is involved. Until
+# then this exposes `web`/`main` directly over plain HTTP, which is why
+# this file isn't yet the whole story for anything beyond private
+# family/friends testing.
+#
+# Ports deliberately match the local-dev convention (WEB_PORT=5330,
+# PORT=5331, Postgres 5333) rather than each service's own plain default —
+# this VPS runs other projects too, so the same collision-avoidance reason
+# `docs/DEPLOYMENT.md`'s local-dev section gives applies here as well.
+
+name: milvaloop
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Bound to loopback only, never the public interface — this exists so
+    # the deploy workflow (running directly on the VPS host, not inside a
+    # container) can run migrations against it before the app containers
+    # start; nothing outside this machine can reach it. Postgres's own
+    # internal listen port is always 5432 regardless of this host-side
+    # remap — DATABASE_URL in the production secret must target
+    # localhost:5333 (this host mapping), while `main`'s own DATABASE_URL
+    # below targets postgres:5432 (the internal Docker network) instead.
+    ports:
+      - '127.0.0.1:5333:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Not yet reachable from outside the Docker network — nothing in the app
+  # actually stores or serves a file through this yet (see
+  # packages/storage), so there's no presigned-URL-needs-a-public-hostname
+  # problem to solve until that first real feature lands.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  main:
+    build:
+      context: .
+      dockerfile: services/main/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 5331
+      # The internal Docker network, not the loopback host mapping above
+      # — containers reach each other by service name and each service's
+      # own internal port, never through the host-side remap.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+    ports:
+      - '5331:5331'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SITE_ENV: ${NEXT_PUBLIC_SITE_ENV}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5330
+    ports:
+      - '5330:5330'
+    depends_on:
+      - main
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

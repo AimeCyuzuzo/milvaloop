@@ -1,0 +1,79 @@
+# Runs on the self-hosted runner living on the production VPS, so every
+# step below executes directly there — no SSH, no image registry, no
+# artifact upload/download between jobs.
+#
+# The production env file is written fresh on every run from the
+# PRODUCTION_ENV secret (see the "production" environment in this repo's
+# Settings) rather than kept as a standing file on the VPS — one thing
+# left to create by hand instead of two, and rotating a secret means
+# editing it in GitHub, not SSHing into the box (see docs/DEPLOYMENT.md's
+# "environments never share secrets" principle for what has to be in it,
+# never the .env.example placeholders).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A second push landing mid-deploy queues behind the first rather than
+# racing it — two deploys running their migration step at once is exactly
+# the kind of concurrency bug CODE_QUALITY.md's "correct under
+# concurrency" bar exists to catch, generalized to deploys.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    # Scopes PRODUCTION_ENV to this job and, if configured in this repo's
+    # Settings → Environments, lets a deploy require manual approval or
+    # restrict which branch can trigger it — protection a plain repo
+    # secret doesn't get.
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Write the production env file
+        run: printf '%s' "${{ secrets.PRODUCTION_ENV }}" > .env
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The same bar docs/DEPLOYMENT.md sets for any deploy, checked fresh
+      # here rather than trusted from whatever a PR's own CI run reported.
+      - name: Verify
+        run: |
+          pnpm check-types
+          pnpm lint
+          pnpm test
+          pnpm build
+
+      # Postgres (plus Redis/MinIO, so the app has everywhere it needs the
+      # moment it starts) comes up, and migrations run against it, before
+      # main/web are touched at all — see docs/DEPLOYMENT.md's "migrations
+      # run before the app that depends on them restarts". `--wait` blocks
+      # until each service's own healthcheck passes, not just until the
+      # container starts.
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis minio
+
+      - name: Run database migrations
+        run: pnpm --filter @milvaloop/db db:migrate
+
+      - name: Build and restart the app
+        run: docker compose -f docker-compose.prod.yml up -d --build main web
+
+      - name: Remove unused images
+        run: docker image prune -f
