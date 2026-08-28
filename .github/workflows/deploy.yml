@@ -47,8 +47,16 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # Passed through env:, not inlined directly into the script via
+      # ${{ }} — GitHub Actions substitutes that as literal script text
+      # before the shell parses it, so any quote characters the secret's
+      # own value contains (e.g. SMTP_FROM="...") would break out of the
+      # printf command's quoting. A real environment variable's value is
+      # just data to the shell, never re-parsed as shell syntax.
       - name: Write the production env file
-        run: printf '%s' "${{ secrets.PRODUCTION_ENV }}" > .env
+        env:
+          PRODUCTION_ENV: ${{ secrets.PRODUCTION_ENV }}
+        run: printf '%s' "$PRODUCTION_ENV" > .env
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
