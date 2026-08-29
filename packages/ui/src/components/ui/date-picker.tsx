@@ -12,7 +12,6 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   month: 'long',
   day: 'numeric',
-  timeZone: 'UTC',
 });
 
 export interface DatePickerProps {
@@ -23,14 +22,28 @@ export interface DatePickerProps {
   disabled?: boolean;
 }
 
+// Treated as a pure calendar date with no time-of-day or timezone at all —
+// both directions read/write the Date object's own *local* parts, never
+// the UTC ones, matching how the underlying Calendar (react-day-picker)
+// represents a selected day (local midnight). Mixing in UTC accessors
+// used to reintroduce the exact bug this component now avoids: in any
+// timezone ahead of UTC (Rwanda's UTC+2 included), local midnight on the
+// 1st of a month is still the *previous* day in UTC, so reading it back
+// with getUTCDate() silently rolled the selection back a full month once
+// the caller normalized it to "the first of its month".
 function parseIsoDate(value: string | undefined): Date | undefined {
-  return value ? new Date(`${value}T00:00:00.000Z`) : undefined;
+  if (!value) {
+    return undefined;
+  }
+  const parts = value.split('-').map(Number);
+  const [year = 0, month = 1, day = 1] = parts;
+  return new Date(year, month - 1, day);
 }
 
 function toIsoDate(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
