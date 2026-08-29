@@ -35,6 +35,9 @@ importers:
       '@milvaloop/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@next/third-parties':
+        specifier: ^16.3.3
+        version: 16.3.3(next@15.5.23(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
       '@tanstack/react-query':
         specifier: ^5.90.0
         version: 5.101.4(react@19.2.0)
@@ -2348,6 +2351,12 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@next/third-parties@16.3.3':
+    resolution: {integrity: sha512-a7zWBqivPou6cn9vQFcw3V7h7GNsZBKLwC1EOLexBDOwabQ0wO2O9Mi1G8HtCseYvD3z1zcVqN+Ld2gfaZxN1Q==}
+    peerDependencies:
+      next: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0-beta.0
+      react: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
@@ -6666,6 +6675,9 @@ packages:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}
     engines: {node: '>=8'}
 
+  third-party-capital@1.0.20:
+    resolution: {integrity: sha512-oB7yIimd8SuGptespDAZnNkzIz+NWaJCu2RMsbs4Wmp9zSDUM8Nhi3s2OOcqYuv3mN4hitXc8DVx+LyUmbUDiA==}
+
   through2@4.0.2:
     resolution: {integrity: sha512-iOqSav00cVxEEICeD7TjLB1sueEL+81Wpzp2bY17uZjZN0pWZPuo4suZ/61VujxmqSGFfgOcNuTZ85QJwNZQpw==}
 
@@ -9023,6 +9035,12 @@ snapshots:
 
   '@next/swc-win32-x64-msvc@15.5.23':
     optional: true
+
+  '@next/third-parties@16.3.3(next@15.5.23(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      next: 15.5.23(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      react: 19.2.0
+      third-party-capital: 1.0.20
 
   '@noble/hashes@1.8.0': {}
 
@@ -13717,6 +13735,8 @@ snapshots:
       '@istanbuljs/schema': 0.1.6
       glob: 7.2.3
       minimatch: 3.1.2
+
+  third-party-capital@1.0.20: {}
 
   through2@4.0.2:
     dependencies:

@@ -6,6 +6,7 @@ import './globals.css';
 
 import { Providers } from './providers';
 import { siteConfig } from '@/lib/site-config';
+import { GoogleAnalytics } from '@next/third-parties/google';
 
 // The body font is Poppins (below); Geist Mono is reserved for actual
 // monospace use — see typography.tsx's inlineCode variant.
@@ -71,6 +72,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <GoogleAnalytics gaId={"G-L8KJNSBXL9"} />
       <body className={`${poppins.variable} ${geistMono.variable} antialiased`}>
         <script
           type="application/ld+json"
