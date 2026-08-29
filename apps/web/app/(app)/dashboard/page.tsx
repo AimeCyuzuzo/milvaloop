@@ -8,8 +8,10 @@ import { Button } from '@milvaloop/ui/button';
 import { useResendVerificationMutation } from '@/lib/auth/use-auth-mutations';
 import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 
+import { MoneyOverTimeChart } from './_components/money-over-time-chart';
 import { RecentActivityCard } from './_components/recent-activity-card';
 import { SummaryCards } from './_components/summary-cards';
+import { ThisMonthComplianceBar } from './_components/this-month-compliance-bar';
 
 export default function DashboardPage() {
   const { data: session } = useCurrentSessionQuery();
@@ -43,6 +45,11 @@ export default function DashboardPage() {
       ) : null}
 
       <SummaryCards />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <MoneyOverTimeChart />
+        <ThisMonthComplianceBar />
+      </div>
 
       <RecentActivityCard />
     </div>
