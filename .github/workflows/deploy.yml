@@ -36,10 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Version comes from package.json's own "packageManager" field
-      # (pnpm@9.0.0) — pnpm/action-setup now refuses to start if a version
-      # is also given here, treating the two as a conflict rather than
-      # redundant agreement.
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -47,12 +43,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Passed through env:, not inlined directly into the script via
-      # ${{ }} — GitHub Actions substitutes that as literal script text
-      # before the shell parses it, so any quote characters the secret's
-      # own value contains (e.g. SMTP_FROM="...") would break out of the
-      # printf command's quoting. A real environment variable's value is
-      # just data to the shell, never re-parsed as shell syntax.
       - name: Write the production env file
         env:
           PRODUCTION_ENV: ${{ secrets.PRODUCTION_ENV }}
