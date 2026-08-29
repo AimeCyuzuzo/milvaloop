@@ -10,11 +10,20 @@ import { cn } from '@milvaloop/ui/lib/utils';
 // contrast step needs no border at all. `highlighted` is the one deliberate
 // exception — a real accent, not a structural boundary, so it gets its own
 // explicit border rather than inheriting one.
+//
+// The tinted variants (`primary`/`success`/`warning`) are a wash of an
+// existing semantic token, never a new color — they stay correct in both
+// themes for free, since the token itself is already redefined per theme
+// (see globals.css), and there's no fourth palette to keep in sync if this
+// app's accent colors ever change.
 const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl py-6', {
   variants: {
     variant: {
       default: 'bg-card',
       highlighted: 'bg-card border border-primary',
+      primary: 'bg-primary/25',
+      success: 'bg-success/25',
+      warning: 'bg-warning/25',
     },
   },
   defaultVariants: {
