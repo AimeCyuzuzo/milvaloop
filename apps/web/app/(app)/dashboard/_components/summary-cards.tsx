@@ -92,7 +92,7 @@ export function SummaryCards() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="primary">
         <CardHeader>
           <IconBadge icon={Users} tone="primary" />
           <div>
