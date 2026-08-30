@@ -17,13 +17,16 @@ import {
   applyBulkFill,
   applyEvenSplit,
   applyToCells,
+  buildBaselineGrid,
   buildHistoricalEntries,
   cellKey,
+  computeDeltaSummary,
   getCell,
   monthsBetween,
   setCell,
   type GridState,
 } from '@/lib/contributions/historical-grid';
+import { useAnalyticsQuery } from '@/lib/contributions/use-analytics-query';
 import { useRecordHistoricalBatchMutation } from '@/lib/contributions/use-contribution-mutations';
 import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-query';
 import { useMembersQuery } from '@/lib/members/use-members-query';
@@ -50,8 +53,11 @@ interface CellPosition {
 export default function ImportContributionsPage() {
   const { data: membersData, isPending: membersPending } = useMembersQuery();
   const { data: settings, isPending: settingsPending } = useShareSettingsQuery();
+  const { data: analytics, isPending: analyticsPending } = useAnalyticsQuery(Boolean(settings?.current));
   const recordBatch = useRecordHistoricalBatchMutation();
   const [grid, setGrid] = useState<GridState>(new Map());
+  const [baseline, setBaseline] = useState<GridState>(new Map());
+  const [baselineKey, setBaselineKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -90,7 +96,28 @@ export default function ImportContributionsPage() {
   }, [earliestKnownPrice]);
 
   const hasShareSettings = !!settings?.current;
-  const filledCount = grid.size;
+  const deltaSummary = useMemo(() => computeDeltaSummary(grid, baseline), [grid, baseline]);
+
+  // Seeds the grid from what's already recorded (see buildBaselineGrid)
+  // whenever the period range genuinely changes — first load, or after
+  // AddHistoricalPriceDialog extends it further back — rather than on
+  // every analytics refetch, which would otherwise stomp on whatever the
+  // member is mid-typing the next time TanStack Query refetches in the
+  // background (e.g. a tab refocus). Re-keyed to null on a successful
+  // save so the next "Import more" round re-seeds from the latest data.
+  useEffect(() => {
+    if (!analytics) {
+      return;
+    }
+    const key = periods.join(',');
+    if (key === baselineKey) {
+      return;
+    }
+    const nextBaseline = buildBaselineGrid(analytics.members, periods);
+    setBaseline(nextBaseline);
+    setGrid(new Map(nextBaseline));
+    setBaselineKey(key);
+  }, [analytics, periods, baselineKey]);
 
   // Escape clears whatever's selected — a plain window listener rather
   // than a per-cell handler, since the selection can span the whole table
@@ -137,7 +164,7 @@ export default function ImportContributionsPage() {
   async function handleSave() {
     setError(null);
     const membershipIds = members.map((member) => member.membershipId);
-    const entries = buildHistoricalEntries(grid, membershipIds);
+    const entries = buildHistoricalEntries(grid, membershipIds, baseline);
     if (entries.length === 0) {
       setError('Fill at least one cell before saving.');
       return;
@@ -145,14 +172,24 @@ export default function ImportContributionsPage() {
     try {
       await recordBatch.mutateAsync({ entries });
       toast.success('History saved — awaiting approval.');
-      setGrid(new Map());
+      // Re-seeds from the latest baseline on the next render rather than
+      // clearing to blank — the just-submitted amounts stay pending until
+      // approved (see buildBaselineGrid), so this mainly picks up anything
+      // else that changed, but it means "Import more" never regresses to
+      // the pre-fix blank-grid behavior this whole change exists to fix.
+      setBaselineKey(null);
       setSaved(true);
     } catch (submitError) {
       setError(getErrorMessage(submitError));
     }
   }
 
-  if (membersPending || settingsPending) {
+  // analytics is only enabled once a share price exists (see useAnalyticsQuery
+  // above) — an enabled:false query never leaves TanStack Query's initial
+  // pending status, so gating on it unconditionally would skeleton forever
+  // on a cooperative that hasn't set one up yet, instead of falling through
+  // to that message below.
+  if (membersPending || settingsPending || (hasShareSettings && analyticsPending)) {
     return <Skeleton className="h-64 w-full" />;
   }
 
@@ -215,13 +252,13 @@ export default function ImportContributionsPage() {
         <BulkFillDialog
           members={members}
           periods={periods}
-          onApply={(membershipIds, amount, fillPeriods) => setGrid(applyBulkFill(grid, membershipIds, amount, fillPeriods))}
+          onApply={(membershipIds, amount, fillPeriods) => setGrid(applyBulkFill(grid, membershipIds, amount, fillPeriods, baseline))}
         />
         <EvenSplitDialog
           members={members}
           periods={periods}
           onApply={(membershipIds, totalAmount, fillPeriods) =>
-            setGrid(applyEvenSplit(grid, membershipIds, totalAmount, fillPeriods))
+            setGrid(applyEvenSplit(grid, membershipIds, totalAmount, fillPeriods, baseline))
           }
         />
         {earliestKnownPrice ? <AddHistoricalPriceDialog earliestKnownPrice={earliestKnownPrice} /> : null}
@@ -230,7 +267,7 @@ export default function ImportContributionsPage() {
       {selection.size > 0 ? (
         <SelectionFillBar
           count={selection.size}
-          onFill={(amount) => setGrid(applyToCells(grid, [...selection], amount))}
+          onFill={(amount) => setGrid(applyToCells(grid, [...selection], amount, baseline))}
           onClear={() => {
             setSelection(new Set());
             setAnchor(null);
@@ -259,6 +296,7 @@ export default function ImportContributionsPage() {
                     <GridCellInput
                       value={getCell(grid, member.membershipId, period)}
                       onChange={(amount) => setGrid(setCell(grid, member.membershipId, period, amount))}
+                      baseline={getCell(baseline, member.membershipId, period) ?? 0}
                       selected={selection.has(cellKey(member.membershipId, period))}
                       onSelect={(event) => handleCellSelect(rowIndex, colIndex, event)}
                     />
@@ -272,9 +310,9 @@ export default function ImportContributionsPage() {
 
       <div className="flex items-center justify-between gap-4">
         <Typography variant="small" color="muted">
-          {filledCount} cell{filledCount === 1 ? '' : 's'} filled — {formatAmount([...grid.values()].reduce((sum, amount) => sum + amount, 0))} total
+          {deltaSummary.cellCount} cell{deltaSummary.cellCount === 1 ? '' : 's'} topped up — {formatAmount(deltaSummary.amount)} new
         </Typography>
-        <Button onClick={() => void handleSave()} disabled={recordBatch.isPending || filledCount === 0}>
+        <Button onClick={() => void handleSave()} disabled={recordBatch.isPending || deltaSummary.cellCount === 0}>
           {recordBatch.isPending ? 'Saving…' : 'Save history'}
         </Button>
       </div>

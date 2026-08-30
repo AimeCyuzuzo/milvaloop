@@ -13,9 +13,15 @@ import { Input } from '@milvaloop/ui/input';
 // A hand-composed primitive in this same style as date-picker.tsx, not a
 // shadcn-CLI component, so every other Input prop (placeholder, disabled,
 // className) still passes straight through.
-export interface AmountInputProps extends Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'type' | 'inputMode'> {
+export interface AmountInputProps extends Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'type' | 'inputMode' | 'min'> {
   value: number | undefined;
   onChange: (amount: number) => void;
+  // A floor the typed amount can't go below — e.g. an amount that's
+  // already recorded elsewhere and can only be topped up from this field,
+  // never reduced. Clamped immediately on change rather than left to a
+  // save-time rejection, so the field never shows a number the app is
+  // about to silently disregard.
+  min?: number;
 }
 
 export function formatAmountInput(amount: number): string {
@@ -27,13 +33,16 @@ export function parseAmountInput(text: string): number {
   return digitsOnly ? parseInt(digitsOnly, 10) : 0;
 }
 
-export function AmountInput({ value, onChange, ...props }: AmountInputProps) {
+export function AmountInput({ value, onChange, min, ...props }: AmountInputProps) {
   return (
     <Input
       type="text"
       inputMode="numeric"
       value={value ? formatAmountInput(value) : ''}
-      onChange={(event) => onChange(parseAmountInput(event.target.value))}
+      onChange={(event) => {
+        const parsed = parseAmountInput(event.target.value);
+        onChange(min !== undefined ? Math.max(parsed, min) : parsed);
+      }}
       {...props}
     />
   );
