@@ -17,13 +17,16 @@ import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-qu
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
 // Every color here is one of this app's own existing semantic tokens at low
-// opacity (see Card's `primary`/`success`/`warning` variants) — never a new
-// hue, so this stays correct in both themes and never drifts from the rest
-// of the design system's palette.
+// opacity (see Card's `primary`/`success`/`warning`/`violet`/`sky`
+// variants) — never a new hue, so this stays correct in both themes and
+// never drifts from the rest of the design system's palette. `primary`
+// (Navy) is deliberately not used here — it's markedly lower-chroma than
+// the other four, so its wash reads as gray rather than a clear color.
 const ICON_BADGE_CLASSES = {
-  primary: 'bg-primary/15 text-primary',
   success: 'bg-success/15 text-success',
   warning: 'bg-warning/15 text-warning',
+  violet: 'bg-violet/15 text-violet',
+  sky: 'bg-sky/15 text-sky',
 } as const;
 
 function IconBadge({ icon: Icon, tone }: { icon: React.ComponentType<{ className?: string }>; tone: keyof typeof ICON_BADGE_CLASSES }) {
@@ -66,9 +69,9 @@ export function SummaryCards() {
         </CardContent>
       </Card>
 
-      <Card variant="primary">
+      <Card variant="sky">
         <CardHeader>
-          <IconBadge icon={CalendarCheck} tone="primary" />
+          <IconBadge icon={CalendarCheck} tone="sky" />
           <div>
             <Typography variant="muted">This month</Typography>
             <CardTitle size="lg">{compliance ? `${compliance.satisfied}/${compliance.totalMembers} satisfied` : '—'}</CardTitle>
@@ -92,9 +95,9 @@ export function SummaryCards() {
         </CardContent>
       </Card>
 
-      <Card variant="primary">
+      <Card variant="violet">
         <CardHeader>
-          <IconBadge icon={Users} tone="primary" />
+          <IconBadge icon={Users} tone="violet" />
           <div>
             <Typography variant="muted">Members</Typography>
             <CardTitle size="lg">{activeMemberCount}</CardTitle>

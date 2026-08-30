@@ -28,9 +28,12 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
 
 // Every active member can see this table regardless of status — the
 // transparency decision behind the feature — the status filter only
-// changes what's shown, never who can see it.
+// changes what's shown, never who can see it. Defaults to 'all' rather
+// than 'pending' — a cooperative where everything happens to already be
+// approved would otherwise open on what looks like an empty ledger, with
+// nothing to say the rest is one filter away.
 export function ContributionsTable() {
-  const [status, setStatus] = useState<StatusFilter>('pending');
+  const [status, setStatus] = useState<StatusFilter>('all');
   const { data, isPending } = useContributionsQuery(status === 'all' ? {} : { status });
   const canApprove = useHasPermission(PERMISSIONS.CONTRIBUTIONS_APPROVE);
   const approveAllPending = useApproveAllPendingMutation();

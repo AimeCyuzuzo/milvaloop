@@ -68,6 +68,15 @@ function currentPeriod(): string {
   return `${now.getUTCFullYear()}-${month}-01`;
 }
 
+// `months` before `period` ('YYYY-MM-01') — for tests that need to record
+// history further back than a fresh signup's own memberSince (always
+// "today"), the exact scenario a real historical import backdates past.
+function monthsBefore(period: string, months: number): string {
+  const [year, month] = period.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1 - months, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
 // Invite emails link to the accept page with the raw token in the query
 // string — see members.e2e-spec.ts's identical helper.
 function extractInviteToken(
@@ -1151,6 +1160,70 @@ describe('Contributions (e2e)', () => {
           (period) => period.period === currentPeriod(),
         ),
       ).toMatchObject({ dueAmount: SHARE_PRICE, paidAmount: 0, status: 'due' });
+    });
+
+    it('includes a period backdated before the member joined, once it has an approved allocation', async () => {
+      // A fresh signup's memberSince is always "today" — loadPeriodsThrough
+      // otherwise anchors a member's period range there, which would make
+      // a genuinely historical import (the whole point of that feature)
+      // silently invisible everywhere period-by-period data is reported,
+      // even though the money it recorded is real and approved.
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      const historicalPeriod = monthsBefore(currentPeriod(), 3);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, historicalPeriod);
+
+      await request(app.getHttpServer())
+        .post('/contributions/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          entries: [
+            {
+              membershipId: founderMembershipId,
+              contributedAt: historicalPeriod,
+              allocations: [{ period: historicalPeriod, amount: SHARE_PRICE }],
+            },
+          ],
+        });
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const analytics = await request(app.getHttpServer())
+        .get('/contributions/analytics')
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      const { periods, members } = bodyAs<{
+        periods: Array<{ period: string; satisfied: number }>;
+        members: Array<{
+          email: string;
+          periods: Array<{
+            period: string;
+            paidAmount: number;
+            status: string;
+          }>;
+        }>;
+      }>(analytics);
+      expect(
+        periods.find((row) => row.period === historicalPeriod),
+      ).toMatchObject({ satisfied: 1 });
+      const founderRow = members.find(
+        (member) => member.email === founder.user.email,
+      );
+      expect(
+        founderRow?.periods.find(
+          (period) => period.period === historicalPeriod,
+        ),
+      ).toMatchObject({ paidAmount: SHARE_PRICE, status: 'satisfied' });
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(
+        bodyAs<MemberContributionSummary>(summary).periods.find(
+          (period) => period.period === historicalPeriod,
+        ),
+      ).toMatchObject({ paidAmount: SHARE_PRICE, status: 'satisfied' });
     });
 
     it("never mixes another tenant's members into the report", async () => {
