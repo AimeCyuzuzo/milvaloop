@@ -1479,10 +1479,18 @@ export class ContributionsService {
   }
 
   // Every period from the later of (membership joined, cooperative's first
-  // share price) through `throughPeriod` inclusive, with each period's due
-  // amount, amount actually paid (approved allocations only — a pending
-  // one might still be rejected, so it doesn't reduce what shows as
-  // outstanding), and computed status.
+  // share price) through `throughPeriod` inclusive — except a period that
+  // already has a real approved allocation is never excluded regardless of
+  // that floor. memberSince governs where an *unpaid* obligation notionally
+  // starts, but it must never be able to hide money that's actually been
+  // recorded and approved (e.g. a historical import backdated further than
+  // memberSince currently says) — this product's whole premise is that
+  // every number stays reconstructable from the events behind it, so an
+  // approved payment can't become invisible just because a membership row's
+  // own start date wasn't backdated to match. Each period's due amount,
+  // amount actually paid (approved allocations only — a pending one might
+  // still be rejected, so it doesn't reduce what shows as outstanding), and
+  // computed status.
   private async loadPeriodsThrough(
     tenantId: string,
     membershipId: string,
@@ -1513,7 +1521,7 @@ export class ContributionsService {
     const firstPricePeriod = truncateToMonth(
       new Date(sharePriceRows[0].effectiveFrom),
     );
-    const startPeriod =
+    const memberOrPriceStart =
       membershipStartPeriod > firstPricePeriod
         ? membershipStartPeriod
         : firstPricePeriod;
@@ -1535,6 +1543,16 @@ export class ContributionsService {
           eq(contributions.status, 'approved'),
         ),
       );
+
+    const earliestAllocatedPeriod = allocationRows.reduce<string | null>(
+      (earliest, row) =>
+        !earliest || row.period < earliest ? row.period : earliest,
+      null,
+    );
+    const startPeriod =
+      earliestAllocatedPeriod && earliestAllocatedPeriod < memberOrPriceStart
+        ? earliestAllocatedPeriod
+        : memberOrPriceStart;
 
     const paidByPeriod = new Map<string, number>();
     const priceIdByPeriod = new Map<string, string>();
