@@ -11,15 +11,16 @@ import { cn } from '@milvaloop/ui/lib/utils';
 // exception — a real accent, not a structural boundary, so it gets its own
 // explicit border rather than inheriting one.
 //
-// The tinted variants (`primary`/`success`/`warning`/`violet`) are a wash
-// of an existing semantic token, never a new color — they stay correct in
-// both themes for free, since the token itself is already redefined per
-// theme (see globals.css), and there's no fourth palette to keep in sync
-// if this app's accent colors ever change. `primary` (Navy) is the one
-// tint to reach for carefully: it's markedly lower-chroma than the other
-// four (see globals.css's comment on --primary), so its 25%-wash reads as
-// gray rather than a clear color — prefer one of the others for a card
-// that has no real status/brand tie to primary specifically.
+// The tinted variants (`primary`/`success`/`warning`/`violet`/`sky`) are a
+// wash of an existing semantic token, never a new color — they stay
+// correct in both themes for free, since the token itself is already
+// redefined per theme (see globals.css), and there's no fourth palette to
+// keep in sync if this app's accent colors ever change. `primary` (Navy)
+// is the one tint to reach for carefully: it's markedly lower-chroma than
+// the other four (see globals.css's comment on --primary), so its
+// 25%-wash reads as gray rather than a clear color — prefer one of the
+// others for a card that has no real status/brand tie to primary
+// specifically.
 const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl py-6', {
   variants: {
     variant: {
@@ -29,6 +30,7 @@ const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl py
       success: 'bg-success/25',
       warning: 'bg-warning/25',
       violet: 'bg-violet/25',
+      sky: 'bg-sky/25',
     },
   },
   defaultVariants: {

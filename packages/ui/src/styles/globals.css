@@ -56,13 +56,17 @@
   --warning-foreground: oklch(0.22 0.02 270);
   --destructive: oklch(0.599 0.18 27.5); /* Coral #D6483F */
   --destructive-foreground: oklch(0.99 0.003 270);
-  /* A fifth, purely decorative hue at the same light band as success/
-     warning above — for a card that carries no compliance/status meaning
-     (e.g. Members), so it never borrows a color success/warning/
-     destructive already mean something specific by elsewhere on the same
-     screen (see the dashboard's compliance card). */
+  /* Purely decorative hues at the same light band as success/warning
+     above — for a card that carries no compliance/status meaning (e.g.
+     Members, or a headline number that isn't itself a status), so a card
+     never borrows a color success/warning/destructive already mean
+     something specific by elsewhere on the same screen (see the
+     dashboard's compliance card). Sky reuses the brand's own third color
+     (see --ring) rather than inventing a fourth hue from nothing. */
   --violet: oklch(0.72 0.15 322);
   --violet-foreground: oklch(0.22 0.02 270);
+  --sky: oklch(0.762 0.115 252.1); /* Sky #7AB6F9 */
+  --sky-foreground: oklch(0.22 0.02 270);
 
   --border: oklch(0.89 0.01 270);
   --input: oklch(0.89 0.01 270);
@@ -113,6 +117,8 @@
   --destructive-foreground: oklch(0.16 0.02 270);
   --violet: oklch(0.72 0.15 322);
   --violet-foreground: oklch(0.16 0.02 270);
+  --sky: oklch(0.762 0.115 252.1);
+  --sky-foreground: oklch(0.16 0.02 270);
 
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
@@ -159,6 +165,8 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-violet: var(--violet);
   --color-violet-foreground: var(--violet-foreground);
+  --color-sky: var(--sky);
+  --color-sky-foreground: var(--sky-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
