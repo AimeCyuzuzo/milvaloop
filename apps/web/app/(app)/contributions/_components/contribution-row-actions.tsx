@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { PERMISSIONS, type ContributionListItem } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
 import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@milvaloop/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@milvaloop/ui/dropdown-menu';
 
 import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useHasPermission } from '@/lib/auth/use-permissions';
@@ -22,7 +23,7 @@ import { UnapproveContributionDialog } from './unapprove-contribution-dialog';
 // they're the only membership in the tenant eligible to approve at all
 // (see ContributionsService.assertCanApprove) — this is a UI hint of that
 // same rule, not the enforcement, which happens on the backend regardless
-// of what this button lets someone click.
+// of what this menu lets someone click.
 function useEligibleApproverCount(): number {
   const { data } = useMembersQuery();
   if (!data) {
@@ -35,6 +36,10 @@ function useEligibleApproverCount(): number {
   ).length;
 }
 
+// Dialogs are rendered as siblings of the DropdownMenu, not nested inside
+// a DropdownMenuItem — opening one from inside a menu item fights Radix's
+// own focus handling when the menu closes in the same tick (see
+// member-row-actions.tsx's identical pattern for the members table).
 export function ContributionRowActions({ contribution }: { contribution: ContributionListItem }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -50,32 +55,10 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
 
   // The same recorder-≠-approver rule governs undoing an approval as
   // making one in the first place (see ContributionsService.assertCanApprove,
-  // reused unchanged for unapproveContribution) — this is a UI hint of
-  // that rule, not the enforcement.
+  // reused unchanged for unapproveContribution) — the item stays visible
+  // but disabled, with its own label saying why, rather than disappearing
+  // with no explanation.
   const isSelfLocked = eligibleApprovers > 1 && contribution.recordedBy.membershipId === myMembershipId;
-
-  if (contribution.status === 'approved') {
-    const unapproveButton = (
-      <Button size="sm" variant="outline" onClick={() => setUnapproveOpen(true)} disabled={isSelfLocked}>
-        Unapprove
-      </Button>
-    );
-    return (
-      <div className="flex items-center gap-2">
-        {isSelfLocked ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>{unapproveButton}</span>
-            </TooltipTrigger>
-            <TooltipContent>Someone else needs to unapprove this contribution.</TooltipContent>
-          </Tooltip>
-        ) : (
-          unapproveButton
-        )}
-        <UnapproveContributionDialog contributionId={contribution.id} open={unapproveOpen} onOpenChange={setUnapproveOpen} />
-      </div>
-    );
-  }
 
   async function handleApprove() {
     // ConfirmDialog surfaces whatever this throws verbatim as its own
@@ -90,27 +73,31 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
     toast.success('Contribution approved.');
   }
 
-  const approveButton = (
-    <Button size="sm" onClick={() => setApproveOpen(true)} disabled={isSelfLocked}>
-      Approve
-    </Button>
-  );
-
   return (
-    <div className="flex items-center gap-2">
-      {isSelfLocked ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>{approveButton}</span>
-          </TooltipTrigger>
-          <TooltipContent>Someone else needs to approve this contribution.</TooltipContent>
-        </Tooltip>
-      ) : (
-        approveButton
-      )}
-      <Button size="sm" variant="outline" onClick={() => setRejectOpen(true)}>
-        Reject
-      </Button>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Row actions">
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {contribution.status === 'pending' ? (
+            <>
+              <DropdownMenuItem disabled={isSelfLocked} onSelect={() => setApproveOpen(true)}>
+                {isSelfLocked ? 'Approve (needs someone else)' : 'Approve'}
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setRejectOpen(true)}>
+                Reject
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <DropdownMenuItem variant="destructive" disabled={isSelfLocked} onSelect={() => setUnapproveOpen(true)}>
+              {isSelfLocked ? 'Unapprove (needs someone else)' : 'Unapprove'}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ConfirmDialog
         open={approveOpen}
         onOpenChange={setApproveOpen}
@@ -121,6 +108,7 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
         onConfirm={handleApprove}
       />
       <RejectContributionDialog contributionId={contribution.id} open={rejectOpen} onOpenChange={setRejectOpen} />
-    </div>
+      <UnapproveContributionDialog contributionId={contribution.id} open={unapproveOpen} onOpenChange={setUnapproveOpen} />
+    </>
   );
 }

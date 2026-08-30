@@ -13,6 +13,12 @@ import { Input } from '@milvaloop/ui/input';
 import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useUnapproveContributionMutation } from '@/lib/contributions/use-contribution-mutations';
 
+// The common, no-thought-required reasons this happens — one tap fills
+// the field instead of making someone type the same handful of
+// explanations every time. Still just fills the input, not a separate
+// input mode: it can be edited or replaced before submitting.
+const QUICK_REASONS = ['Mistake', 'Duplicate entry', 'Wrong amount'];
+
 export function UnapproveContributionDialog({
   contributionId,
   open,
@@ -66,6 +72,19 @@ export function UnapproveContributionDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Reason</FormLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_REASONS.map((reason) => (
+                      <Button
+                        key={reason}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => form.setValue('reason', reason, { shouldValidate: true })}
+                      >
+                        {reason}
+                      </Button>
+                    ))}
+                  </div>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
