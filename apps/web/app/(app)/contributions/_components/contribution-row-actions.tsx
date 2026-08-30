@@ -16,6 +16,7 @@ import { useApproveContributionMutation } from '@/lib/contributions/use-contribu
 import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
+import { ContributionDetailsDrawer } from './contribution-details-drawer';
 import { RejectContributionDialog } from './reject-contribution-dialog';
 import { UnapproveContributionDialog } from './unapprove-contribution-dialog';
 
@@ -41,6 +42,7 @@ function useEligibleApproverCount(): number {
 // own focus handling when the menu closes in the same tick (see
 // member-row-actions.tsx's identical pattern for the members table).
 export function ContributionRowActions({ contribution }: { contribution: ContributionListItem }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [unapproveOpen, setUnapproveOpen] = useState(false);
@@ -48,10 +50,6 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
   const myMembershipId = useMyMembershipId();
   const eligibleApprovers = useEligibleApproverCount();
   const approve = useApproveContributionMutation();
-
-  if (!canApprove || (contribution.status !== 'pending' && contribution.status !== 'approved')) {
-    return null;
-  }
 
   // The same recorder-≠-approver rule governs undoing an approval as
   // making one in the first place (see ContributionsService.assertCanApprove,
@@ -82,7 +80,8 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {contribution.status === 'pending' ? (
+          <DropdownMenuItem onSelect={() => setDetailsOpen(true)}>Details</DropdownMenuItem>
+          {canApprove && contribution.status === 'pending' ? (
             <>
               <DropdownMenuItem disabled={isSelfLocked} onSelect={() => setApproveOpen(true)}>
                 {isSelfLocked ? 'Approve (needs someone else)' : 'Approve'}
@@ -91,13 +90,15 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
                 Reject
               </DropdownMenuItem>
             </>
-          ) : (
+          ) : null}
+          {canApprove && contribution.status === 'approved' ? (
             <DropdownMenuItem variant="destructive" disabled={isSelfLocked} onSelect={() => setUnapproveOpen(true)}>
               {isSelfLocked ? 'Unapprove (needs someone else)' : 'Unapprove'}
             </DropdownMenuItem>
-          )}
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      <ContributionDetailsDrawer contributionId={contribution.id} open={detailsOpen} onOpenChange={setDetailsOpen} />
       <ConfirmDialog
         open={approveOpen}
         onOpenChange={setApproveOpen}

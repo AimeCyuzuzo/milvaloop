@@ -15,6 +15,7 @@ import { useHasPermission } from '@/lib/auth/use-permissions';
 import { useApproveAllPendingMutation } from '@/lib/contributions/use-contribution-mutations';
 import { useContributionsQuery } from '@/lib/contributions/use-contributions-query';
 
+import { BulkActionsBar } from './bulk-actions-bar';
 import { contributionColumns } from './contributions-columns';
 
 type StatusFilter = ContributionStatus | 'all';
@@ -95,6 +96,12 @@ export function ContributionsTable() {
       data={data?.contributions ?? []}
       filterPlaceholder="Search contributions…"
       filters={filterControl}
+      getRowId={(row) => row.id}
+      selectionActions={
+        canApprove
+          ? (selectedRows, clearSelection) => <BulkActionsBar selectedRows={selectedRows} clearSelection={clearSelection} />
+          : undefined
+      }
     />
   );
 }

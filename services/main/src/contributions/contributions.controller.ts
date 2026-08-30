@@ -14,6 +14,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  bulkContributionIdsSchema,
+  bulkRejectSchema,
   contributionIdParamSchema,
   contributionListQuerySchema,
   membershipIdParamSchema,
@@ -26,6 +28,8 @@ import {
   unapproveContributionSchema,
   updateSharePriceSchema,
   PERMISSIONS,
+  type BulkContributionIdsInput,
+  type BulkRejectInput,
   type ContributionIdParam,
   type ContributionListQuery,
   type MembershipIdParam,
@@ -136,6 +140,24 @@ export class ContributionsController {
     return this.contributionsService.getMemberSummary(
       claims.tenantId,
       params.membershipId,
+    );
+  }
+
+  // Registered after every other static GET route above (settings,
+  // compliance-summary, analytics, export, members/:membershipId/summary)
+  // — a bare :id param route has to come last among GET routes or it
+  // would swallow those more specific paths as if "settings" or
+  // "analytics" were a contribution id.
+  @Get(':id')
+  @UseGuards(AccessTokenGuard)
+  async getDetail(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(contributionIdParamSchema))
+    params: ContributionIdParam,
+  ) {
+    return this.contributionsService.getContributionDetail(
+      claims.tenantId,
+      params.id,
     );
   }
 
@@ -276,6 +298,43 @@ export class ContributionsController {
     return this.contributionsService.approveAllPending(
       claims.tenantId,
       claims.sub,
+    );
+  }
+
+  // The ledger table's row-selection floating bar — approve/reject an
+  // explicit set of ids in one action, see ContributionsService.bulkApprove/
+  // bulkReject for why this is exactly as guarded as clicking Approve/Reject
+  // on each row individually.
+  @Post('bulk-approve')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_APPROVE)
+  async bulkApprove(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Body(new ZodValidationPipe(bulkContributionIdsSchema))
+    body: BulkContributionIdsInput,
+  ) {
+    return this.contributionsService.bulkApprove(
+      claims.tenantId,
+      claims.sub,
+      body.ids,
+    );
+  }
+
+  @Post('bulk-reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_APPROVE)
+  async bulkReject(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Body(new ZodValidationPipe(bulkRejectSchema))
+    body: BulkRejectInput,
+  ) {
+    return this.contributionsService.bulkReject(
+      claims.tenantId,
+      claims.sub,
+      body.ids,
+      body.reason,
     );
   }
 

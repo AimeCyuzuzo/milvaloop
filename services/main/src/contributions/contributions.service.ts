@@ -20,7 +20,11 @@ import {
   type AnalyticsPeriodRow,
   type AnalyticsResponse,
   type ApproveAllPendingResponse,
+  type BulkApproveResponse,
+  type BulkRejectResponse,
   type ComplianceSummary,
+  type ContributionAllocationDetail,
+  type ContributionDetailResponse,
   type ContributionListItem,
   type ContributionListQuery,
   type ContributionListResponse,
@@ -119,6 +123,27 @@ function computeStatus(
     return 'overdue';
   }
   return paidAmount > 0 ? 'partial' : 'due';
+}
+
+// The member's unbroken compliance streak from their very first period —
+// the last period in an uninterrupted run of satisfied/prepaid periods
+// starting at the beginning of `periods` (already ordered oldest-first by
+// loadPeriodsThrough), not just the latest satisfied period anywhere. A
+// satisfied period *after* an unresolved gap doesn't mean the member is
+// caught up, so the streak has to stop at the first gap it hits rather
+// than reporting the most recent good period regardless of what's
+// unresolved before it.
+function computeSatisfiedThroughPeriod(
+  periods: ComputedPeriod[],
+): string | null {
+  let through: string | null = null;
+  for (const period of periods) {
+    if (period.status !== 'satisfied' && period.status !== 'prepaid') {
+      break;
+    }
+    through = period.period;
+  }
+  return through;
 }
 
 @Injectable()
@@ -680,23 +705,70 @@ export class ContributionsService {
         ),
       );
 
-    const approved: string[] = [];
+    const { succeeded, failed } = await this.applyIndividually(
+      pending.map((row) => row.id),
+      (id) => this.approveContribution(tenantId, approverUserId, id),
+    );
+    return { approved: succeeded, failed };
+  }
+
+  // POST /contributions/bulk-approve and /bulk-reject — the same
+  // convenience approveAllPending already is, but over an explicit
+  // selection (see the ledger table's row-selection floating bar) rather
+  // than literally everything pending. Each id goes through the exact
+  // same approve/reject method a single row's action would, self-approval
+  // rule included, so a bulk action can never do anything a one-at-a-time
+  // click couldn't already do — it's a shortcut for repeating a click, not
+  // a separate, less-guarded code path.
+  async bulkApprove(
+    tenantId: string,
+    actorUserId: string,
+    ids: string[],
+  ): Promise<BulkApproveResponse> {
+    const { succeeded, failed } = await this.applyIndividually(ids, (id) =>
+      this.approveContribution(tenantId, actorUserId, id),
+    );
+    return { approved: succeeded, failed };
+  }
+
+  async bulkReject(
+    tenantId: string,
+    actorUserId: string,
+    ids: string[],
+    reason: string,
+  ): Promise<BulkRejectResponse> {
+    const { succeeded, failed } = await this.applyIndividually(ids, (id) =>
+      this.rejectContribution(tenantId, actorUserId, id, reason),
+    );
+    return { rejected: succeeded, failed };
+  }
+
+  // One id at a time, independently — a failure on one never blocks or
+  // rolls back the rest, it's just reported instead of silently skipped.
+  private async applyIndividually(
+    ids: string[],
+    action: (id: string) => Promise<void>,
+  ): Promise<{
+    succeeded: string[];
+    failed: Array<{ id: string; reason: string }>;
+  }> {
+    const succeeded: string[] = [];
     const failed: Array<{ id: string; reason: string }> = [];
-    for (const row of pending) {
+    for (const id of ids) {
       try {
-        await this.approveContribution(tenantId, approverUserId, row.id);
-        approved.push(row.id);
+        await action(id);
+        succeeded.push(id);
       } catch (error) {
         failed.push({
-          id: row.id,
+          id,
           reason:
             error instanceof Error
               ? error.message
-              : 'Could not approve this contribution',
+              : 'Could not complete this action',
         });
       }
     }
-    return { approved, failed };
+    return { succeeded, failed };
   }
 
   async rejectContribution(
@@ -1164,6 +1236,18 @@ export class ContributionsService {
       conditions.push(eq(contributions.membershipId, filters.membershipId));
     }
 
+    const items = await this.loadContributionListItems(tenantId, conditions);
+    return { contributions: items };
+  }
+
+  // Shared by listContributions above and getContributionDetail below —
+  // the row shape and its mapping into ContributionListItem is one thing,
+  // whether the caller wants every row matching a filter or exactly one by
+  // id.
+  private async loadContributionListItems(
+    tenantId: string,
+    conditions: ReturnType<typeof eq>[],
+  ): Promise<ContributionListItem[]> {
     const rows = await this.db
       .select({
         id: contributions.id,
@@ -1186,7 +1270,7 @@ export class ContributionsService {
 
     const contactByMembershipId = await this.loadMembershipContacts(tenantId);
 
-    const items: ContributionListItem[] = rows.map((row) => ({
+    return rows.map((row) => ({
       id: row.id,
       member: {
         membershipId: row.memberMembershipId,
@@ -1216,8 +1300,61 @@ export class ContributionsService {
       rejectionReason: row.rejectionReason,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
 
-    return { contributions: items };
+  // GET /contributions/:id — see contributionDetailResponseSchema's own
+  // comment for why this exists: the ledger row's own total can't show
+  // which periods it actually settles, even though that breakdown has
+  // been sitting in contribution_allocations since the moment it was
+  // recorded.
+  async getContributionDetail(
+    tenantId: string,
+    contributionId: string,
+  ): Promise<ContributionDetailResponse> {
+    const [item] = await this.loadContributionListItems(tenantId, [
+      eq(contributions.tenantId, tenantId),
+      eq(contributions.id, contributionId),
+    ]);
+    if (!item) {
+      throw new NotFoundException('No contribution found');
+    }
+
+    const allocationRows: ContributionAllocationDetail[] = await this.db
+      .select({
+        period: contributionAllocations.period,
+        amount: contributionAllocations.amount,
+        sharePriceAmount: sharePrices.amount,
+      })
+      .from(contributionAllocations)
+      .innerJoin(
+        sharePrices,
+        eq(contributionAllocations.sharePriceId, sharePrices.id),
+      )
+      .where(
+        and(
+          eq(contributionAllocations.tenantId, tenantId),
+          eq(contributionAllocations.contributionId, contributionId),
+        ),
+      )
+      .orderBy(contributionAllocations.period);
+
+    const sharePriceRows = await this.loadSharePrices(this.db, tenantId);
+    const memberSnapshot =
+      sharePriceRows.length > 0
+        ? await this.computeMemberSnapshot(
+            tenantId,
+            item.member.membershipId,
+            sharePriceRows,
+          )
+        : null;
+
+    return {
+      contribution: item,
+      allocations: allocationRows,
+      currentlySatisfiedThroughPeriod: memberSnapshot
+        ? computeSatisfiedThroughPeriod(memberSnapshot.periods)
+        : null,
+    };
   }
 
   // GET /contributions/export — the ledger as a spreadsheet, respecting

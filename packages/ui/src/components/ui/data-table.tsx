@@ -9,17 +9,21 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
   type Table as TanstackTable,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@milvaloop/ui/button';
+import { Checkbox } from '@milvaloop/ui/checkbox';
 import { Input } from '@milvaloop/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@milvaloop/ui/table';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+
+const SELECT_COLUMN_ID = 'select';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -36,36 +40,62 @@ interface DataTableProps<TData, TValue> {
   filters?: React.ReactNode;
   /** Rows per page to start on. Defaults to 10. */
   pageSize?: number;
+  /** A stable identity for a row, used as the row-selection key. Required
+   * whenever `selectionActions` is passed — falls back to array index
+   * otherwise, which is only safe for a table that never enables selection
+   * (an index is meaningless once rows are sorted, filtered, or paged). */
+  getRowId?: (row: TData) => string;
+  /**
+   * Turns on a checkbox column and renders this in a floating bar once at
+   * least one row is selected — "approve these", "reject these", etc.
+   * `clearSelection` lets the caller reset the checkboxes once its action
+   * completes. Selection state lives here, not per call site, for the same
+   * reason sorting/filtering do: one table, one place that owns it.
+   */
+  selectionActions?: (selectedRows: TData[], clearSelection: () => void) => React.ReactNode;
 }
 
-// Sorting, a single global text filter, and pagination — the three things
-// every real table in this product needs (member lists, contribution
-// history, audit logs) — wired once here via TanStack Table's headless
-// hooks instead of re-hand-rolling pagination math per feature. Per-column
-// filters/faceted filters/row selection aren't included; add them here
-// (not per call site) once a second table actually needs one.
+// Sorting, a single global text filter, pagination, and (opt-in) row
+// selection — what every real table in this product needs (member lists,
+// contribution history, audit logs) — wired once here via TanStack Table's
+// headless hooks instead of re-hand-rolling this per feature. Per-column/
+// faceted filters aren't included; add them here (not per call site) once
+// a table actually needs one.
 export function DataTable<TData, TValue>({
   columns,
   data,
   filterPlaceholder,
   filters,
   pageSize = 10,
+  getRowId,
+  selectionActions,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+  const tableColumns = React.useMemo(
+    () => (selectionActions ? [buildSelectColumn<TData, TValue>(), ...columns] : columns),
+    [columns, selectionActions],
+  );
 
   const table = useReactTable({
     data,
-    columns,
-    state: { sorting, globalFilter },
+    columns: tableColumns,
+    getRowId: getRowId ?? ((_row, index) => String(index)),
+    state: { sorting, globalFilter, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: Boolean(selectionActions),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize } },
   });
+
+  const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
   return (
     <div className="flex flex-col gap-4">
@@ -122,7 +152,7 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="group">
+                <TableRow key={row.id} className="group" data-state={row.getIsSelected() ? 'selected' : undefined}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -130,7 +160,7 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-muted-foreground h-24 text-center">
+                <TableCell colSpan={tableColumns.length} className="text-muted-foreground h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -140,8 +170,31 @@ export function DataTable<TData, TValue>({
       </div>
 
       <DataTablePagination table={table} />
+
+      {selectionActions && selectedRows.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+          {selectionActions(selectedRows, () => setRowSelection({}))}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function buildSelectColumn<TData, TValue>(): ColumnDef<TData, TValue> {
+  return {
+    id: SELECT_COLUMN_ID,
+    enableSorting: false,
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+        onCheckedChange={(checked) => table.toggleAllPageRowsSelected(Boolean(checked))}
+        aria-label="Select all rows on this page"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(Boolean(checked))} aria-label="Select row" />
+    ),
+  };
 }
 
 function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) {
