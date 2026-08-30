@@ -761,6 +761,135 @@ describe('Contributions (e2e)', () => {
         .set('Authorization', `Bearer ${founder.accessToken}`);
       expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(0);
     });
+
+    it('unapproves an approved contribution back to pending, dropping it from what counts as paid', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const unapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Recorded against the wrong month' });
+      expect(unapprove.status).toBe(204);
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      // Nothing else needs to unwind — a contribution's allocations only
+      // ever count toward what's paid while it's approved (see
+      // loadPeriodsThrough), so reverting the status alone is enough to
+      // put the member's own numbers back to how they read before it was
+      // ever approved.
+      expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(0);
+
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'pending' });
+      const { contributions } = bodyAs<{
+        contributions: Array<{
+          id: string;
+          status: string;
+          approvedBy: unknown;
+        }>;
+      }>(list);
+      expect(contributions).toEqual([
+        expect.objectContaining({
+          id: contributionId,
+          status: 'pending',
+          approvedBy: null,
+        }),
+      ]);
+    });
+
+    it('rejects unapproving a contribution that was never approved', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+
+      const response = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Should not apply to a pending entry' });
+      expect(response.status).toBe(400);
+    });
+
+    it('blocks self-unapproval once a second eligible approver exists', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const approver = await inviteAndAccept(
+        founder.accessToken,
+        'approver3@example.com',
+        ['contributions:approve'],
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      // A second approver has to be the one to approve it in the first
+      // place too — the founder recorded it, so they can't self-approve
+      // once someone else is eligible (see the earlier test).
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${approver.accessToken}`);
+
+      const selfUnapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Trying to undo my own recording' });
+      expect(selfUnapprove.status).toBe(403);
+
+      const secondApproverUnapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${approver.accessToken}`)
+        .send({ reason: 'Actually a duplicate' });
+      expect(secondApproverUnapprove.status).toBe(204);
+    });
+
+    it('rejects unapproving without contributions:approve', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'noapprove@example.com',
+        [],
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ reason: 'Not my call to make' });
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /contributions/import', () => {

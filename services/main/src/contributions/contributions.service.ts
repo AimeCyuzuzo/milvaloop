@@ -613,10 +613,12 @@ export class ContributionsService {
         tenantId,
         approverUserId,
       );
-      const contribution = await this.loadPendingContribution(
+      const contribution = await this.loadContributionByStatus(
         tx,
         tenantId,
         contributionId,
+        'pending',
+        'This contribution has already been decided',
       );
       await this.assertCanApprove(
         tx,
@@ -709,10 +711,12 @@ export class ContributionsService {
         tenantId,
         approverUserId,
       );
-      const contribution = await this.loadPendingContribution(
+      const contribution = await this.loadContributionByStatus(
         tx,
         tenantId,
         contributionId,
+        'pending',
+        'This contribution has already been decided',
       );
       await this.assertCanApprove(
         tx,
@@ -745,6 +749,71 @@ export class ContributionsService {
           membershipId: contribution.membershipId,
           name: rejectedMember?.name,
           email: rejectedMember?.email,
+          amount: contribution.amount,
+          reason,
+        },
+      });
+    });
+  }
+
+  // Reverses an approval back to pending — under the exact same
+  // self-approval rule as approving it in the first place, since undoing
+  // one is just as much a judgment call. Nothing needs to be unwound
+  // beyond the status flip itself: every period/analytics computation
+  // already filters allocations to `status = 'approved'` (see
+  // loadPeriodsThrough), so a contribution stops counting as paid the
+  // moment it stops being approved, with no separate cleanup. Clears
+  // approvedByMembershipId/approvedAt rather than leaving them pointing at
+  // a decision that no longer holds.
+  async unapproveContribution(
+    tenantId: string,
+    actorUserId: string,
+    contributionId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const actorMembershipId = await this.resolveActiveMembershipId(
+        tx,
+        tenantId,
+        actorUserId,
+      );
+      const contribution = await this.loadContributionByStatus(
+        tx,
+        tenantId,
+        contributionId,
+        'approved',
+        'Only an approved contribution can be unapproved',
+      );
+      await this.assertCanApprove(
+        tx,
+        tenantId,
+        actorMembershipId,
+        contribution.recordedByMembershipId,
+      );
+
+      await tx
+        .update(contributions)
+        .set({
+          status: 'pending',
+          approvedByMembershipId: null,
+          approvedAt: null,
+        })
+        .where(eq(contributions.id, contributionId));
+
+      const member = await this.loadMembershipContact(
+        tx,
+        contribution.membershipId,
+      );
+      await this.auditLog.record(tx, {
+        tenantId,
+        actorUserId,
+        action: 'contribution.unapproved',
+        entityType: 'contribution',
+        entityId: contributionId,
+        metadata: {
+          membershipId: contribution.membershipId,
+          name: member?.name,
+          email: member?.email,
           amount: contribution.amount,
           reason,
         },
@@ -1330,10 +1399,12 @@ export class ContributionsService {
     return asOf.id;
   }
 
-  private async loadPendingContribution(
+  private async loadContributionByStatus(
     tx: Transaction,
     tenantId: string,
     contributionId: string,
+    expectedStatus: 'pending' | 'approved',
+    wrongStatusMessage: string,
   ) {
     const [contribution] = await tx
       .select()
@@ -1348,10 +1419,8 @@ export class ContributionsService {
     if (!contribution) {
       throw new NotFoundException('No contribution found');
     }
-    if (contribution.status !== 'pending') {
-      throw new BadRequestException(
-        'This contribution has already been decided',
-      );
+    if (contribution.status !== expectedStatus) {
+      throw new BadRequestException(wrongStatusMessage);
     }
     return contribution;
   }

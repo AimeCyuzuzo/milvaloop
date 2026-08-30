@@ -104,6 +104,16 @@ export const rejectContributionSchema = z.object({
 });
 export type RejectContributionInput = z.infer<typeof rejectContributionSchema>;
 
+// POST /contributions/:id/unapprove — reverses an approval back to
+// pending, under the same self-approval rule as approving in the first
+// place (see ContributionsService.assertCanApprove). A reason is required
+// for the same reason rejecting one requires it: this is kept on the
+// audit trail, not silently reversible with no explanation.
+export const unapproveContributionSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type UnapproveContributionInput = z.infer<typeof unapproveContributionSchema>;
+
 // GET /contributions — status/membershipId are both optional filters; an
 // empty query lists everything the caller is allowed to see (transparency:
 // every active member of a tenant can see every contribution in it).

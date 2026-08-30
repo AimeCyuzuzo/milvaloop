@@ -16,6 +16,7 @@ import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
 import { RejectContributionDialog } from './reject-contribution-dialog';
+import { UnapproveContributionDialog } from './unapprove-contribution-dialog';
 
 // The recorder of a contribution can't also be its own approver unless
 // they're the only membership in the tenant eligible to approve at all
@@ -37,16 +38,44 @@ function useEligibleApproverCount(): number {
 export function ContributionRowActions({ contribution }: { contribution: ContributionListItem }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [unapproveOpen, setUnapproveOpen] = useState(false);
   const canApprove = useHasPermission(PERMISSIONS.CONTRIBUTIONS_APPROVE);
   const myMembershipId = useMyMembershipId();
   const eligibleApprovers = useEligibleApproverCount();
   const approve = useApproveContributionMutation();
 
-  if (contribution.status !== 'pending' || !canApprove) {
+  if (!canApprove || (contribution.status !== 'pending' && contribution.status !== 'approved')) {
     return null;
   }
 
+  // The same recorder-≠-approver rule governs undoing an approval as
+  // making one in the first place (see ContributionsService.assertCanApprove,
+  // reused unchanged for unapproveContribution) — this is a UI hint of
+  // that rule, not the enforcement.
   const isSelfLocked = eligibleApprovers > 1 && contribution.recordedBy.membershipId === myMembershipId;
+
+  if (contribution.status === 'approved') {
+    const unapproveButton = (
+      <Button size="sm" variant="outline" onClick={() => setUnapproveOpen(true)} disabled={isSelfLocked}>
+        Unapprove
+      </Button>
+    );
+    return (
+      <div className="flex items-center gap-2">
+        {isSelfLocked ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>{unapproveButton}</span>
+            </TooltipTrigger>
+            <TooltipContent>Someone else needs to unapprove this contribution.</TooltipContent>
+          </Tooltip>
+        ) : (
+          unapproveButton
+        )}
+        <UnapproveContributionDialog contributionId={contribution.id} open={unapproveOpen} onOpenChange={setUnapproveOpen} />
+      </div>
+    );
+  }
 
   async function handleApprove() {
     // ConfirmDialog surfaces whatever this throws verbatim as its own
@@ -86,7 +115,7 @@ export function ContributionRowActions({ contribution }: { contribution: Contrib
         open={approveOpen}
         onOpenChange={setApproveOpen}
         title="Approve this contribution?"
-        description={`${contribution.member.name}'s ${formatAmount(contribution.amount)} contribution paid on ${formatDate(contribution.contributedAt)} will be added to the official ledger. This can't be undone from here.`}
+        description={`${contribution.member.name}'s ${formatAmount(contribution.amount)} contribution paid on ${formatDate(contribution.contributedAt)} will be added to the official ledger.`}
         confirmLabel="Approve"
         pendingLabel="Approving…"
         onConfirm={handleApprove}

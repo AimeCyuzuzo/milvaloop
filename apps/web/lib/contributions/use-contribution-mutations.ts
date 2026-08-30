@@ -9,6 +9,7 @@ import type {
   RejectContributionInput,
   SetSharePriceInput,
   SharePrice,
+  UnapproveContributionInput,
   UpdateSharePriceInput,
 } from '@milvaloop/types';
 
@@ -65,6 +66,15 @@ export function useRejectContributionMutation() {
   return useMutation({
     mutationFn: ({ contributionId, ...input }: RejectContributionInput & { contributionId: string }) =>
       apiFetch<void>(`/contributions/${contributionId}/reject`, { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useUnapproveContributionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contributionId, ...input }: UnapproveContributionInput & { contributionId: string }) =>
+      apiFetch<void>(`/contributions/${contributionId}/unapprove`, { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
   });
 }

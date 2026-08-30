@@ -23,6 +23,7 @@ import {
   rejectContributionSchema,
   setSharePriceSchema,
   sharePriceIdParamSchema,
+  unapproveContributionSchema,
   updateSharePriceSchema,
   PERMISSIONS,
   type ContributionIdParam,
@@ -34,6 +35,7 @@ import {
   type RejectContributionInput,
   type SetSharePriceInput,
   type SharePriceIdParam,
+  type UnapproveContributionInput,
   type UpdateSharePriceInput,
 } from '@milvaloop/types';
 import type { Response } from 'express';
@@ -289,6 +291,25 @@ export class ContributionsController {
     body: RejectContributionInput,
   ) {
     await this.contributionsService.rejectContribution(
+      claims.tenantId,
+      claims.sub,
+      params.id,
+      body.reason,
+    );
+  }
+
+  @Post(':id/unapprove')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CONTRIBUTIONS_APPROVE)
+  async unapprove(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(contributionIdParamSchema))
+    params: ContributionIdParam,
+    @Body(new ZodValidationPipe(unapproveContributionSchema))
+    body: UnapproveContributionInput,
+  ) {
+    await this.contributionsService.unapproveContribution(
       claims.tenantId,
       claims.sub,
       params.id,
