@@ -162,33 +162,36 @@ export interface HistoricalGridEntry {
   allocations: Array<{ period: string; amount: number }>;
 }
 
-// One entry per member with at least one cell above its own baseline —
-// the shape POST /contributions/import expects. Only the amount *above*
-// whatever's already recorded for that (member, period) is submitted (see
-// buildBaselineGrid/deltaFor): a cell left exactly at its baseline, or
-// edited down toward it (the floor the input/fill helpers already clamp
-// to), contributes nothing, so reopening this page and saving again can
-// never double up a period that's already covered. `contributedAt` is the
-// last topped-up period in that member's own row, a reasonable stand-in
-// for "when this was recorded" on a historical entry where the real
-// payment dates are long past and not individually tracked.
+// One entry per (member, period) cell above its own baseline — each becomes
+// its own ledger row, `contributedAt` defaulting to that period's own first
+// day, rather than grouping a member's whole filled row into a single
+// multi-month entry. A backfill is really N independent facts ("June was
+// 50k", "July was 50k", ...) asserted at once, not one payment that
+// happened to cover several months the way a live top-up can — keeping
+// them as separate rows means one wrong month can be corrected on its own
+// later (unapprove just that row) instead of unwinding a shared blob, and
+// it's what makes a plain "which month is this for" reading of the ledger
+// possible at all for a backfilled entry. Only the amount *above* whatever
+// baseline already covers a cell is submitted (see buildBaselineGrid/
+// deltaFor) — a cell left at its baseline, or edited back down to it (the
+// floor the input/fill helpers already clamp to), contributes nothing, so
+// reopening this page and saving again can never double up a period
+// that's already covered.
 export function buildHistoricalEntries(grid: GridState, membershipIds: string[], baseline: GridState): HistoricalGridEntry[] {
   const entries: HistoricalGridEntry[] = [];
   for (const membershipId of membershipIds) {
-    const allocations = [...grid.entries()]
+    const cells = [...grid.entries()]
       .filter(([key]) => key.startsWith(`${membershipId}|`))
       .map(([key, amount]) => ({ period: key.slice(membershipId.length + 1), amount: amount - (baseline.get(key) ?? 0) }))
-      .filter((allocation) => allocation.amount > 0)
+      .filter((cell) => cell.amount > 0)
       .sort((a, b) => a.period.localeCompare(b.period));
-    const latest = allocations[allocations.length - 1];
-    if (!latest) {
-      continue;
+    for (const cell of cells) {
+      entries.push({
+        membershipId,
+        contributedAt: cell.period,
+        allocations: [{ period: cell.period, amount: cell.amount }],
+      });
     }
-    entries.push({
-      membershipId,
-      contributedAt: latest.period,
-      allocations,
-    });
   }
   return entries;
 }

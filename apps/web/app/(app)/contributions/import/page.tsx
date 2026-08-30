@@ -226,7 +226,10 @@ export default function ImportContributionsPage() {
       <Card>
         <CardHeader>
           <CardTitle>History saved</CardTitle>
-          <CardDescription>It&rsquo;s recorded as pending, the same as any other contribution — approve it from the ledger.</CardDescription>
+          <CardDescription>
+            Each month you filled in is its own pending entry, the same as any other contribution — select several at
+            once in the ledger to approve them together.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button asChild>
