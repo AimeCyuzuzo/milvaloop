@@ -196,7 +196,9 @@ export function DataTable<TData, TValue>({
       <DataTablePagination table={table} />
 
       {selectionActions && selectedRows.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+        // bottom-24 (not bottom-6) below md clears the fixed mobile bottom
+        // tab bar — same clearance the page's own <main> already reserves.
+        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4 md:bottom-6">
           {selectionActions(selectedRows, () => setRowSelection({}))}
         </div>
       ) : null}

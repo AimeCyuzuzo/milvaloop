@@ -13,7 +13,7 @@ import { useAnalyticsQuery } from '@/lib/contributions/use-analytics-query';
 import { useShareSettingsQuery } from '@/lib/contributions/use-share-settings-query';
 
 import { AnalyticsTotalsCards } from './_components/analytics-totals-cards';
-import { memberAnalyticsColumns } from './_components/member-analytics-columns';
+import { memberAnalyticsColumns, renderMemberAnalyticsMobileCard } from './_components/member-analytics-columns';
 import { PeriodComplianceChart } from './_components/period-compliance-chart';
 import { PeriodHistoryTable } from './_components/period-history-table';
 
@@ -94,6 +94,7 @@ export default function ContributionsAnalyticsPage() {
             columns={memberAnalyticsColumns}
             data={analytics.members}
             filterPlaceholder="Search members…"
+            mobileCard={renderMemberAnalyticsMobileCard}
           />
         </CardContent>
       </Card>
