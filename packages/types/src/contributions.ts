@@ -13,7 +13,7 @@ export type ContributionStatus = z.infer<typeof contributionStatusSchema>;
 // A period's status is always computed from the ledger, never stored (see
 // PLATFORM_BRAINSTORMING.md's Contribution ≠ Obligation separation) —
 // this schema describes the computed shape, not a database column.
-export const periodStatusValueSchema = z.enum(['satisfied', 'partial', 'due', 'overdue', 'prepaid']);
+export const periodStatusValueSchema = z.enum(['satisfied', 'partial', 'due', 'overdue', 'prepaid', 'upcoming']);
 export type PeriodStatusValue = z.infer<typeof periodStatusValueSchema>;
 
 export const allocationLineSchema = z.object({

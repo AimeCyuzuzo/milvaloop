@@ -10,13 +10,13 @@ import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
 import { Checkbox } from '@milvaloop/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 import { Label } from '@milvaloop/ui/label';
@@ -51,7 +51,7 @@ export function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOp
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -61,11 +61,11 @@ export function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOp
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite a member</DialogTitle>
-          <DialogDescription>They&rsquo;ll get an email with a link to join.</DialogDescription>
-        </DialogHeader>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Invite a member</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>They&rsquo;ll get an email with a link to join.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {formError ? (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
@@ -123,14 +123,14 @@ export function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOp
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Sending invite…' : 'Send invite'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

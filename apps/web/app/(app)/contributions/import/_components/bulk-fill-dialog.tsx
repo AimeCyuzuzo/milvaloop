@@ -5,14 +5,14 @@ import { useState } from 'react';
 import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 import { Label } from '@milvaloop/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 
@@ -49,15 +49,17 @@ export function BulkFillDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger asChild>
         <Button variant="outline">Fill the same amount for several months</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Fill the same amount for several months</DialogTitle>
-          <DialogDescription>Applies to every month in range for each member selected — edit any single cell afterward.</DialogDescription>
-        </DialogHeader>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Fill the same amount for several months</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
+            Applies to every month in range for each member selected — edit any single cell afterward.
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <div className="flex flex-col gap-4">
           <MemberChecklist members={members} selected={selected} onChange={setSelected} />
           <div className="flex flex-col gap-2">
@@ -97,12 +99,12 @@ export function BulkFillDialog({
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" disabled={!canApply} onClick={handleApply}>
             Fill
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

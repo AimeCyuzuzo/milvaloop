@@ -109,7 +109,13 @@ function priceAsOf(
 // A past period left unsatisfied is always 'overdue', whether it received
 // a partial payment or nothing at all — 'partial' only describes a
 // current-or-future period still within its own window. Past-due lateness
-// is the more urgent fact once the window has closed.
+// is the more urgent fact once the window has closed. An untouched future
+// period is 'upcoming', not 'due' — it hasn't started yet, so nothing is
+// actually owed for it; 'due' means genuinely outstanding *right now* (the
+// current period), and conflating the two read as a member already being
+// behind on a month that hasn't arrived. A future period that already has
+// a partial payment against it stays 'partial', same as a current one —
+// real money moved, worth showing distinctly from a plain lookahead row.
 function computeStatus(
   period: string,
   currentPeriod: string,
@@ -122,7 +128,10 @@ function computeStatus(
   if (period < currentPeriod) {
     return 'overdue';
   }
-  return paidAmount > 0 ? 'partial' : 'due';
+  if (paidAmount > 0) {
+    return 'partial';
+  }
+  return period > currentPeriod ? 'upcoming' : 'due';
 }
 
 // The member's unbroken compliance streak from their very first period —
@@ -1200,6 +1209,10 @@ export class ContributionsService {
       due: 0,
       overdue: 0,
       prepaid: 0,
+      // Can never actually land here — loadPeriodsThrough is capped at
+      // `current` below, and 'upcoming' only ever describes a period past
+      // it — but the type requires every status accounted for.
+      upcoming: 0,
     };
     for (const { id: membershipId } of activeMemberships) {
       const periods = await this.loadPeriodsThrough(

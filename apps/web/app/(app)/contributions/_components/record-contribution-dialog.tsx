@@ -11,17 +11,17 @@ import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import { DatePicker } from '@milvaloop/ui/date-picker';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@milvaloop/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Typography } from '@milvaloop/ui/typography';
 
@@ -146,7 +146,7 @@ export function RecordContributionDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -155,18 +155,18 @@ export function RecordContributionDialog({
         }
       }}
     >
-      <DialogTrigger asChild>
+      <ResponsiveDialogTrigger asChild>
         <Button>{triggerLabel}</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{triggerLabel}</DialogTitle>
-          <DialogDescription>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{triggerLabel}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             {step === 'details'
               ? detailsDescription
               : 'This is how the payment will be applied — review it before confirming.'}
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {formError ? (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
@@ -249,11 +249,11 @@ export function RecordContributionDialog({
                   </FormItem>
                 )}
               />
-              <DialogFooter>
+              <ResponsiveDialogFooter>
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? 'Calculating…' : 'Continue'}
                 </Button>
-              </DialogFooter>
+              </ResponsiveDialogFooter>
             </form>
           </Form>
         ) : (
@@ -280,17 +280,17 @@ export function RecordContributionDialog({
               </div>
             ) : null}
 
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="button" variant="outline" onClick={() => setStep('details')}>
                 Back
               </Button>
               <Button type="button" onClick={handleConfirm} disabled={record.isPending}>
                 {record.isPending ? 'Recording…' : 'Confirm'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

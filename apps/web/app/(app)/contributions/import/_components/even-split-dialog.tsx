@@ -5,14 +5,14 @@ import { useMemo, useState } from 'react';
 import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 import { Label } from '@milvaloop/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Typography } from '@milvaloop/ui/typography';
@@ -60,15 +60,15 @@ export function EvenSplitDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger asChild>
         <Button variant="outline">Split a lump sum across several months</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Split a lump sum across several months</DialogTitle>
-          <DialogDescription>Divides the total evenly per member — any remainder goes to the oldest month.</DialogDescription>
-        </DialogHeader>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Split a lump sum across several months</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Divides the total evenly per member — any remainder goes to the oldest month.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <div className="flex flex-col gap-4">
           <MemberChecklist members={members} selected={selected} onChange={setSelected} />
           <div className="flex flex-col gap-2">
@@ -114,12 +114,12 @@ export function EvenSplitDialog({
             </Typography>
           ) : null}
         </div>
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" disabled={!canApply} onClick={handleApply}>
             Fill
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

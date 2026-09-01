@@ -16,7 +16,7 @@ import { useApproveAllPendingMutation } from '@/lib/contributions/use-contributi
 import { useContributionsQuery } from '@/lib/contributions/use-contributions-query';
 
 import { BulkActionsBar } from './bulk-actions-bar';
-import { contributionColumns } from './contributions-columns';
+import { contributionColumns, renderContributionMobileCard } from './contributions-columns';
 
 type StatusFilter = ContributionStatus | 'all';
 
@@ -97,6 +97,7 @@ export function ContributionsTable() {
       filterPlaceholder="Search contributions…"
       filters={filterControl}
       getRowId={(row) => row.id}
+      mobileCard={renderContributionMobileCard}
       selectionActions={
         canApprove
           ? (selectedRows, clearSelection) => <BulkActionsBar selectedRows={selectedRows} clearSelection={clearSelection} />
