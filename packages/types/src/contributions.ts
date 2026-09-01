@@ -104,6 +104,42 @@ export const rejectContributionSchema = z.object({
 });
 export type RejectContributionInput = z.infer<typeof rejectContributionSchema>;
 
+// POST /contributions/:id/unapprove — reverses an approval back to
+// pending, under the same self-approval rule as approving in the first
+// place (see ContributionsService.assertCanApprove). A reason is required
+// for the same reason rejecting one requires it: this is kept on the
+// audit trail, not silently reversible with no explanation.
+export const unapproveContributionSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type UnapproveContributionInput = z.infer<typeof unapproveContributionSchema>;
+
+// POST /contributions/bulk-approve — the same convenience
+// approve-all-pending already is, but over an explicit selection rather
+// than literally everything pending (see the ledger table's row-selection
+// floating bar). Reuses approveAllPendingResponseSchema's exact shape:
+// same self-approval rule, same "report per-id success/failure" contract.
+export const bulkContributionIdsSchema = z.object({
+  ids: z.array(z.uuid()).min(1),
+});
+export type BulkContributionIdsInput = z.infer<typeof bulkContributionIdsSchema>;
+export type BulkApproveResponse = ApproveAllPendingResponse;
+
+// POST /contributions/bulk-reject — one shared reason applied to every
+// selected id, each rejected independently (same contract as bulk-approve
+// above, just a different verb on the successful-ids field).
+export const bulkRejectSchema = z.object({
+  ids: z.array(z.uuid()).min(1),
+  reason: z.string().min(1).max(500),
+});
+export type BulkRejectInput = z.infer<typeof bulkRejectSchema>;
+
+export const bulkRejectResponseSchema = z.object({
+  rejected: z.array(z.uuid()),
+  failed: z.array(z.object({ id: z.uuid(), reason: z.string() })),
+});
+export type BulkRejectResponse = z.infer<typeof bulkRejectResponseSchema>;
+
 // GET /contributions — status/membershipId are both optional filters; an
 // empty query lists everything the caller is allowed to see (transparency:
 // every active member of a tenant can see every contribution in it).
@@ -138,6 +174,30 @@ export const contributionListResponseSchema = z.object({
   contributions: z.array(contributionListItemSchema),
 });
 export type ContributionListResponse = z.infer<typeof contributionListResponseSchema>;
+
+// GET /contributions/:id — the "what is this actually for" drill-down a
+// contribution's own row in the ledger can't show on its own: a lump sum
+// covering several months reads as one number until this breaks it back
+// down into the periods it actually settles (see contribution-allocations.ts
+// — this data already exists for every contribution, live or historical,
+// this just exposes it). `currentlySatisfiedThroughPeriod` is the member's
+// own unbroken compliance streak from their very first period, today —
+// not specific to this one contribution, but the honest context for "is
+// this member caught up" that a bare allocations list can't convey by
+// itself.
+export const contributionAllocationDetailSchema = z.object({
+  period: periodSchema,
+  amount: z.number().int().positive(),
+  sharePriceAmount: z.number().int().positive(),
+});
+export type ContributionAllocationDetail = z.infer<typeof contributionAllocationDetailSchema>;
+
+export const contributionDetailResponseSchema = z.object({
+  contribution: contributionListItemSchema,
+  allocations: z.array(contributionAllocationDetailSchema),
+  currentlySatisfiedThroughPeriod: periodSchema.nullable(),
+});
+export type ContributionDetailResponse = z.infer<typeof contributionDetailResponseSchema>;
 
 // GET /contributions/members/:membershipId/summary — the "explain this"
 // surface. `costBasis` (money actually paid, ever) is the headline figure —

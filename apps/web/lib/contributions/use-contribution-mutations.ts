@@ -1,6 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   ApproveAllPendingResponse,
+  BulkApproveResponse,
+  BulkContributionIdsInput,
+  BulkRejectInput,
+  BulkRejectResponse,
   PreviewAllocationInput,
   PreviewAllocationResponse,
   RecordContributionInput,
@@ -9,6 +13,7 @@ import type {
   RejectContributionInput,
   SetSharePriceInput,
   SharePrice,
+  UnapproveContributionInput,
   UpdateSharePriceInput,
 } from '@milvaloop/types';
 
@@ -60,11 +65,40 @@ export function useApproveContributionMutation() {
   });
 }
 
+// The ledger table's row-selection floating bar — see
+// ContributionsService.bulkApprove/bulkReject.
+export function useBulkApproveMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkContributionIdsInput) =>
+      apiFetch<BulkApproveResponse>('/contributions/bulk-approve', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useBulkRejectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkRejectInput) =>
+      apiFetch<BulkRejectResponse>('/contributions/bulk-reject', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
 export function useRejectContributionMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ contributionId, ...input }: RejectContributionInput & { contributionId: string }) =>
       apiFetch<void>(`/contributions/${contributionId}/reject`, { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
+  });
+}
+
+export function useUnapproveContributionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contributionId, ...input }: UnapproveContributionInput & { contributionId: string }) =>
+      apiFetch<void>(`/contributions/${contributionId}/unapprove`, { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTRIBUTIONS_QUERY_KEY }),
   });
 }

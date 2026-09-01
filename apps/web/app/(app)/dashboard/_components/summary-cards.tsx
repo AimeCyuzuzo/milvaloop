@@ -53,9 +53,14 @@ export function SummaryCards() {
   const activeMemberCount = membersData?.members.filter((member) => member.status === 'active').length ?? 0;
   const pendingCount = pending?.contributions.length ?? 0;
   const pendingNeedsAttention = pendingCount > 0 && canApprove;
+  // Stays visible (showing a loading dash, like every other card here)
+  // until the count is actually known — only ever omitted once it's
+  // confirmed to be zero, never during the brief window before `pending`
+  // has loaded, which would otherwise flash the card in and out.
+  const showPendingCard = pending === undefined || pendingCount > 0;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className={showPendingCard ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5' : 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4'}>
       <Card variant="success">
         <CardHeader>
           <IconBadge icon={Wallet} tone="success" />
@@ -108,25 +113,27 @@ export function SummaryCards() {
         </CardContent>
       </Card>
 
-      <Card variant={pendingNeedsAttention ? 'highlighted' : 'default'}>
-        <CardHeader>
-          <IconBadge icon={Clock} tone="warning" />
-          <div>
-            <Typography variant="muted">Pending approvals</Typography>
-            <CardTitle size="lg">{pendingCount}</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <Typography variant="muted">Contributions recorded but not yet confirmed.</Typography>
-          {pendingNeedsAttention ? (
-            <div className="w-fit">
-              <Button asChild size="sm" variant="outline">
-                <Link href="/contributions">Review</Link>
-              </Button>
+      {showPendingCard ? (
+        <Card variant={pendingNeedsAttention ? 'highlighted' : 'default'}>
+          <CardHeader>
+            <IconBadge icon={Clock} tone="warning" />
+            <div>
+              <Typography variant="muted">Pending approvals</Typography>
+              <CardTitle size="lg">{pending ? pendingCount : '—'}</CardTitle>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Typography variant="muted">Contributions recorded but not yet confirmed.</Typography>
+            {pendingNeedsAttention ? (
+              <div className="w-fit">
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/contributions">Review</Link>
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

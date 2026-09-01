@@ -86,6 +86,12 @@ const DESCRIBERS: Record<string, Describer> = {
     const reason = stringField(event.metadata, 'reason');
     return `${actorLabel(event)} rejected ${subjectLabel(event)}'s contribution${amountClause}${reason ? ` — ${reason}` : ''}`;
   },
+  'contribution.unapproved': (event) => {
+    const amount = numberField(event.metadata, 'amount');
+    const amountClause = amount !== undefined ? ` of ${formatAmount(amount)}` : '';
+    const reason = stringField(event.metadata, 'reason');
+    return `${actorLabel(event)} unapproved ${subjectLabel(event)}'s contribution${amountClause}, back to pending${reason ? ` — ${reason}` : ''}`;
+  },
 };
 
 export function describeAuditEvent(event: AuditEvent): string {

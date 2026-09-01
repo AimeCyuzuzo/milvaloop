@@ -761,6 +761,135 @@ describe('Contributions (e2e)', () => {
         .set('Authorization', `Bearer ${founder.accessToken}`);
       expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(0);
     });
+
+    it('unapproves an approved contribution back to pending, dropping it from what counts as paid', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const unapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Recorded against the wrong month' });
+      expect(unapprove.status).toBe(204);
+
+      const summary = await request(app.getHttpServer())
+        .get(`/contributions/members/${founderMembershipId}/summary`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      // Nothing else needs to unwind — a contribution's allocations only
+      // ever count toward what's paid while it's approved (see
+      // loadPeriodsThrough), so reverting the status alone is enough to
+      // put the member's own numbers back to how they read before it was
+      // ever approved.
+      expect(bodyAs<MemberContributionSummary>(summary).costBasis).toBe(0);
+
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'pending' });
+      const { contributions } = bodyAs<{
+        contributions: Array<{
+          id: string;
+          status: string;
+          approvedBy: unknown;
+        }>;
+      }>(list);
+      expect(contributions).toEqual([
+        expect.objectContaining({
+          id: contributionId,
+          status: 'pending',
+          approvedBy: null,
+        }),
+      ]);
+    });
+
+    it('rejects unapproving a contribution that was never approved', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+
+      const response = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Should not apply to a pending entry' });
+      expect(response.status).toBe(400);
+    });
+
+    it('blocks self-unapproval once a second eligible approver exists', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const approver = await inviteAndAccept(
+        founder.accessToken,
+        'approver3@example.com',
+        ['contributions:approve'],
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      // A second approver has to be the one to approve it in the first
+      // place too — the founder recorded it, so they can't self-approve
+      // once someone else is eligible (see the earlier test).
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${approver.accessToken}`);
+
+      const selfUnapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ reason: 'Trying to undo my own recording' });
+      expect(selfUnapprove.status).toBe(403);
+
+      const secondApproverUnapprove = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${approver.accessToken}`)
+        .send({ reason: 'Actually a duplicate' });
+      expect(secondApproverUnapprove.status).toBe(204);
+    });
+
+    it('rejects unapproving without contributions:approve', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'noapprove@example.com',
+        [],
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/unapprove`)
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ reason: 'Not my call to make' });
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /contributions/import', () => {
@@ -901,6 +1030,224 @@ describe('Contributions (e2e)', () => {
       }>(response);
       expect(approved).toEqual([]);
       expect(failed).toHaveLength(1);
+    });
+  });
+
+  describe('POST /contributions/bulk-approve', () => {
+    it('approves exactly the given ids, independently, reporting a self-approval failure rather than blocking on it', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const approver = await inviteAndAccept(
+        founder.accessToken,
+        'bulk-approver@example.com',
+        ['contributions:approve'],
+      );
+
+      // Two of the founder's own — the founder can no longer self-approve
+      // once a second approver exists — and one recorded by that second
+      // approver, which the founder is free to approve.
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const approverMembershipId = await membershipIdByEmail(
+        founder.accessToken,
+        'bulk-approver@example.com',
+      );
+      await recordContribution(
+        approver.accessToken,
+        approverMembershipId,
+        SHARE_PRICE,
+      );
+
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'pending' });
+      const ids = bodyAs<{ contributions: Array<{ id: string }> }>(
+        list,
+      ).contributions.map((c) => c.id);
+      expect(ids).toHaveLength(3);
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/bulk-approve')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ ids });
+      expect(response.status).toBe(200);
+      const { approved, failed } = bodyAs<{
+        approved: string[];
+        failed: Array<{ id: string }>;
+      }>(response);
+      expect(approved).toHaveLength(1);
+      expect(failed).toHaveLength(2);
+    });
+
+    it('rejects without contributions:approve', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, currentPeriod());
+      const plainMember = await inviteAndAccept(
+        founder.accessToken,
+        'no-bulk-approve@example.com',
+        [],
+      );
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founder.accessToken);
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/bulk-approve')
+        .set('Authorization', `Bearer ${plainMember.accessToken}`)
+        .send({ ids: [contributionId] });
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /contributions/bulk-reject', () => {
+    it('rejects every given id with one shared reason', async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      const earlierPeriod = monthsBefore(currentPeriod(), 1);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, earlierPeriod);
+      await recordContribution(
+        founder.accessToken,
+        founderMembershipId,
+        SHARE_PRICE,
+      );
+      const firstId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post('/contributions/import')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          entries: [
+            {
+              membershipId: founderMembershipId,
+              contributedAt: earlierPeriod,
+              allocations: [{ period: earlierPeriod, amount: SHARE_PRICE }],
+            },
+          ],
+        });
+      const list = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'pending' });
+      const ids = bodyAs<{ contributions: Array<{ id: string }> }>(
+        list,
+      ).contributions.map((c) => c.id);
+      expect(ids).toContain(firstId);
+      expect(ids).toHaveLength(2);
+
+      const response = await request(app.getHttpServer())
+        .post('/contributions/bulk-reject')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({ ids, reason: 'Entered by mistake' });
+      expect(response.status).toBe(200);
+      const { rejected, failed } = bodyAs<{
+        rejected: string[];
+        failed: unknown[];
+      }>(response);
+      expect(rejected).toHaveLength(2);
+      expect(failed).toEqual([]);
+
+      const rejectedList = await request(app.getHttpServer())
+        .get('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .query({ status: 'rejected' });
+      const rejectedItems = bodyAs<{
+        contributions: Array<{ rejectionReason: string }>;
+      }>(rejectedList).contributions;
+      expect(
+        rejectedItems.every(
+          (item) => item.rejectionReason === 'Entered by mistake',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  describe('GET /contributions/:id', () => {
+    it("breaks a contribution down by period and reports the member's compliance streak", async () => {
+      const founder = await signupFounder();
+      const founderMembershipId = await activeMembershipId(founder.accessToken);
+      const start = monthsBefore(currentPeriod(), 1);
+      await setSharePrice(founder.accessToken, SHARE_PRICE, start);
+
+      // One contribution covering both the earlier month and the current
+      // one, in a single request — the live waterfall case this feature is
+      // for, not a historical import.
+      await request(app.getHttpServer())
+        .post('/contributions')
+        .set('Authorization', `Bearer ${founder.accessToken}`)
+        .send({
+          membershipId: founderMembershipId,
+          amount: SHARE_PRICE * 2,
+          contributedAt: currentPeriod(),
+          allocations: [
+            { period: start, amount: SHARE_PRICE },
+            { period: currentPeriod(), amount: SHARE_PRICE },
+          ],
+        });
+      const contributionId = await firstContributionId(founder.accessToken);
+      await request(app.getHttpServer())
+        .post(`/contributions/${contributionId}/approve`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+
+      const response = await request(app.getHttpServer())
+        .get(`/contributions/${contributionId}`)
+        .set('Authorization', `Bearer ${founder.accessToken}`);
+      expect(response.status).toBe(200);
+      const body = bodyAs<{
+        contribution: { id: string };
+        allocations: Array<{
+          period: string;
+          amount: number;
+          sharePriceAmount: number;
+        }>;
+        currentlySatisfiedThroughPeriod: string | null;
+      }>(response);
+      expect(body.contribution.id).toBe(contributionId);
+      expect(body.allocations).toEqual([
+        { period: start, amount: SHARE_PRICE, sharePriceAmount: SHARE_PRICE },
+        {
+          period: currentPeriod(),
+          amount: SHARE_PRICE,
+          sharePriceAmount: SHARE_PRICE,
+        },
+      ]);
+      expect(body.currentlySatisfiedThroughPeriod).toBe(currentPeriod());
+    });
+
+    it("never returns another tenant's contribution", async () => {
+      const founderA = await signupFounder();
+      const founderAMembershipId = await activeMembershipId(
+        founderA.accessToken,
+      );
+      await setSharePrice(founderA.accessToken, SHARE_PRICE, currentPeriod());
+      await recordContribution(
+        founderA.accessToken,
+        founderAMembershipId,
+        SHARE_PRICE,
+      );
+      const contributionId = await firstContributionId(founderA.accessToken);
+
+      const founderB = await signupFounder({
+        email: 'detail-b@example.com',
+        tenantName: 'Detail Test Coop B',
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/contributions/${contributionId}`)
+        .set('Authorization', `Bearer ${founderB.accessToken}`);
+      expect(response.status).toBe(404);
     });
   });
 
