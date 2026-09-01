@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@milvaloop/ui/card';
+import { useIsMobile } from '@milvaloop/ui/hooks/use-mobile';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@milvaloop/ui/table';
 import { Typography } from '@milvaloop/ui/typography';
@@ -51,6 +52,7 @@ interface CellPosition {
 // contribution (see ContributionsService.recordHistoricalBatch); nothing
 // is proposed or waterfalled, the grid states exactly what happened.
 export default function ImportContributionsPage() {
+  const isMobile = useIsMobile();
   const { data: membersData, isPending: membersPending } = useMembersQuery();
   const { data: settings, isPending: settingsPending } = useShareSettingsQuery();
   const { data: analytics, isPending: analyticsPending } = useAnalyticsQuery(Boolean(settings?.current));
@@ -182,6 +184,22 @@ export default function ImportContributionsPage() {
     } catch (submitError) {
       setError(getErrorMessage(submitError));
     }
+  }
+
+  // A members×months grid with shift-click range selection has no honest
+  // mobile equivalent — not a smaller version of the same page, a
+  // genuinely different (mouse-and-keyboard) tool. Rather than ship a
+  // technically-scrollable but unusable spreadsheet, this says so plainly
+  // and stops, before any of the states below ever get a chance to render
+  // it. Recording a single contribution stays fully available on mobile
+  // (see RecordContributionDialog) — only this bulk-backfill page needs a
+  // bigger screen.
+  if (isMobile) {
+    return (
+      <Alert>
+        <AlertDescription>Importing history needs a bigger screen — please continue from a laptop or desktop.</AlertDescription>
+      </Alert>
+    );
   }
 
   // analytics is only enabled once a share price exists (see useAnalyticsQuery

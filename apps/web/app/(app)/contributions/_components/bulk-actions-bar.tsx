@@ -47,7 +47,7 @@ export function BulkActionsBar({ selectedRows, clearSelection }: { selectedRows:
   }
 
   return (
-    <div className="bg-card flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg">
+    <div className="bg-card flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-3 rounded-xl border px-4 py-3 shadow-lg">
       <Typography variant="small">{selectedRows.length} selected</Typography>
       <Button size="sm" onClick={() => setApproveOpen(true)}>
         Approve selected

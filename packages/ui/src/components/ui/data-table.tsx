@@ -9,6 +9,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type Row,
   type RowSelectionState,
   type SortingState,
   type Table as TanstackTable,
@@ -18,6 +19,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'luci
 import { Button } from '@milvaloop/ui/button';
 import { Checkbox } from '@milvaloop/ui/checkbox';
 import { Input } from '@milvaloop/ui/input';
+import { cn } from '@milvaloop/ui/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@milvaloop/ui/table';
 
@@ -53,6 +55,17 @@ interface DataTableProps<TData, TValue> {
    * reason sorting/filtering do: one table, one place that owns it.
    */
   selectionActions?: (selectedRows: TData[], clearSelection: () => void) => React.ReactNode;
+  /**
+   * Renders each row as a stacked card below the `md` breakpoint instead
+   * of the table's own horizontally-scrolling row — for a table whose
+   * columns don't meaningfully fit a phone width (several always-visible
+   * columns, a wide badge list, ...). The table itself is unchanged at
+   * `md`+; this only replaces what a narrower screen sees, using the same
+   * sorted/filtered/paginated row set either way. Receives the full
+   * TanStack `Row`, not just its data, so a card can still show a
+   * selection checkbox or any other row-level state if it needs to.
+   */
+  mobileCard?: (row: Row<TData>) => React.ReactNode;
 }
 
 // Sorting, a single global text filter, pagination, and (opt-in) row
@@ -69,6 +82,7 @@ export function DataTable<TData, TValue>({
   pageSize = 10,
   getRowId,
   selectionActions,
+  mobileCard,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
@@ -113,10 +127,20 @@ export function DataTable<TData, TValue>({
         </div>
       ) : null}
 
+      {mobileCard ? (
+        <div className="flex flex-col gap-3 md:hidden">
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => <React.Fragment key={row.id}>{mobileCard(row)}</React.Fragment>)
+          ) : (
+            <p className="text-muted-foreground py-8 text-center text-sm">No results.</p>
+          )}
+        </div>
+      ) : null}
+
       {/* No outer card/ring here — the table sits directly on the page,
           the tinted header row is its own visual boundary. overflow-hidden
           only exists so that tint's corners clip to the radius below. */}
-      <div className="overflow-hidden rounded-xl">
+      <div className={cn('overflow-hidden rounded-xl', mobileCard && 'hidden md:block')}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -184,15 +208,28 @@ function buildSelectColumn<TData, TValue>(): ColumnDef<TData, TValue> {
   return {
     id: SELECT_COLUMN_ID,
     enableSorting: false,
+    // A bare Checkbox is a real 16px box with nothing to grow its tap
+    // target — fine where one sits next to its own clickable Label (a
+    // permissions form, say), but there's no label here to lean on. Sized
+    // up directly, as a real child of the cell rather than behind a
+    // wrapper div, so table.tsx's own `[&>[role=checkbox]]` alignment rule
+    // still applies — a wrapper would put a `div` between the cell and
+    // the checkbox and silently break it.
     header: ({ table }) => (
       <Checkbox
+        className="size-5"
         checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
         onCheckedChange={(checked) => table.toggleAllPageRowsSelected(Boolean(checked))}
         aria-label="Select all rows on this page"
       />
     ),
     cell: ({ row }) => (
-      <Checkbox checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(Boolean(checked))} aria-label="Select row" />
+      <Checkbox
+        className="size-5"
+        checked={row.getIsSelected()}
+        onCheckedChange={(checked) => row.toggleSelected(Boolean(checked))}
+        aria-label="Select row"
+      />
     ),
   };
 }
