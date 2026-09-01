@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTheme } from 'next-themes';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { Check, LogOut, Plus } from 'lucide-react';
 import { changePasswordSchema, personNameSchema, type ChangePasswordInput } from '@milvaloop/types';
 import { z } from 'zod';
 
@@ -14,14 +18,124 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@milvaloop/ui/input';
 import { Skeleton } from '@milvaloop/ui/skeleton';
 import { Switch } from '@milvaloop/ui/switch';
+import { THEME_OPTIONS } from '@milvaloop/ui/theme-toggle';
 import { Typography } from '@milvaloop/ui/typography';
 
 import { getErrorMessage } from '@/lib/api/api-fetch';
 import { applyServerError } from '@/lib/forms/apply-server-error';
-import { useChangePasswordMutation, useUpdateProfileMutation } from '@/lib/auth/use-auth-mutations';
+import {
+  useChangePasswordMutation,
+  useLogoutMutation,
+  useSwitchCooperativeMutation,
+  useUpdateProfileMutation,
+} from '@/lib/auth/use-auth-mutations';
 import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 import { useUpdateReminderPauseMutation } from '@/lib/members/use-members-mutations';
 import { useMyMembership } from '@/lib/members/use-my-membership';
+
+// The sidebar's own header/footer (CooperativeSwitcher, AccountMenu) are
+// unreachable on mobile once the sidebar itself is never opened there (see
+// bottom-tab-bar.tsx) — this page is where that same switching/sign-out
+// capability lives instead, as a plain full-page section rather than a
+// dropdown, since a full page reads better than a cramped menu on a phone.
+// It reuses the exact same mutations those sidebar components call, just
+// with markup suited to a page instead of a compact trigger.
+function CooperativeCard() {
+  const { data: session } = useCurrentSessionQuery();
+  const switchCooperative = useSwitchCooperativeMutation();
+
+  async function handleSelect(cooperativeId: string) {
+    if (!session || cooperativeId === session.tenant.id) {
+      return;
+    }
+    try {
+      await switchCooperative.mutateAsync({ cooperativeId });
+      // Same full reload CooperativeSwitcher uses — every query's cached
+      // data belongs to the cooperative just left, and a client-side cache
+      // clear doesn't reliably force an already-mounted page to refetch.
+      window.location.href = '/dashboard';
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cooperative</CardTitle>
+        <CardDescription>Switch between cooperatives you belong to, or start a new one.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {!session ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <>
+            {session.cooperatives.map((cooperative) => (
+              <Button
+                key={cooperative.id}
+                variant={cooperative.id === session.tenant.id ? 'secondary' : 'outline'}
+                className="justify-between"
+                disabled={switchCooperative.isPending}
+                onClick={() => handleSelect(cooperative.id)}
+              >
+                <span className="truncate">{cooperative.name}</span>
+                {cooperative.id === session.tenant.id ? <Check className="shrink-0" /> : null}
+              </Button>
+            ))}
+            <Button asChild variant="ghost" className="justify-start">
+              <Link href="/cooperatives/new">
+                <Plus />
+                Create a cooperative
+              </Link>
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PreferencesCard() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Preferences</CardTitle>
+        <CardDescription>How MilvaLoop looks on this device.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+          <Button key={value} variant={theme === value ? 'secondary' : 'outline'} size="sm" onClick={() => setTheme(value)}>
+            <Icon />
+            {label}
+          </Button>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SignOutCard() {
+  const router = useRouter();
+  const logout = useLogoutMutation();
+
+  async function handleLogout() {
+    await logout.mutateAsync();
+    router.push('/auth/login');
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <Button variant="destructive" className="w-full" onClick={() => void handleLogout()} disabled={logout.isPending}>
+          <LogOut />
+          {logout.isPending ? 'Signing out…' : 'Sign out'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 const nameFormSchema = z.object({ name: personNameSchema });
 type NameFormValues = z.infer<typeof nameFormSchema>;
@@ -204,6 +318,10 @@ export default function AccountPage() {
           )}
         </CardContent>
       </Card>
+
+      <PreferencesCard />
+      <CooperativeCard />
+      <SignOutCard />
     </div>
   );
 }

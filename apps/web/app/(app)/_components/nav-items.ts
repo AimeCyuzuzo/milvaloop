@@ -33,3 +33,17 @@ export const NAV_ITEMS: NavItem[] = [
   // linking to a page that would just say "ask an admin."
   { label: 'Settings', href: '/settings', icon: Settings, permission: PERMISSIONS.CONTRIBUTIONS_SETTINGS },
 ];
+
+// Which nav item's href lights up for a given pathname — shared by the
+// sidebar (desktop/tablet) and the bottom tab bar (mobile), since both
+// need the exact same answer for the same URL. More than one item's href
+// can prefix-match the same pathname (e.g. /contributions/analytics
+// starts with both /contributions and /contributions/analytics) — only
+// the longest, most specific match should light up, or a parent and its
+// own sub-page would highlight together.
+export function getActiveHref(items: ReadonlyArray<{ href: string }>, pathname: string): string | undefined {
+  return items
+    .map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+}
