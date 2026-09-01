@@ -6,7 +6,14 @@ import { toast } from 'sonner';
 import { unapproveContributionSchema, type UnapproveContributionInput } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 
@@ -47,7 +54,7 @@ export function UnapproveContributionDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -56,14 +63,14 @@ export function UnapproveContributionDialog({
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Unapprove this contribution?</DialogTitle>
-          <DialogDescription>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Unapprove this contribution?</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             It goes back to pending, no longer counted toward what&rsquo;s paid — say why, this is kept on the record
             alongside the entry.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <FormField
@@ -92,17 +99,17 @@ export function UnapproveContributionDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit" variant="destructive" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Unapproving…' : 'Unapprove'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

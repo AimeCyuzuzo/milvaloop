@@ -9,13 +9,13 @@ import { inviteLoginSchema, type ActiveMember, type InviteLoginInput } from '@mi
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 
@@ -58,7 +58,7 @@ export function InviteLoginDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -68,13 +68,13 @@ export function InviteLoginDialog({
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send a login invite to {member.name}</DialogTitle>
-          <DialogDescription>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Send a login invite to {member.name}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             They&rsquo;ll get an email with a link to set a password. Their existing history stays exactly as it is.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {formError ? (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
@@ -95,14 +95,14 @@ export function InviteLoginDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Sending invite…' : 'Send invite'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

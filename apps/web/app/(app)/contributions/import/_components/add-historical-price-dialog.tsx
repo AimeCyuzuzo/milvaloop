@@ -10,14 +10,14 @@ import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 import { DatePicker } from '@milvaloop/ui/date-picker';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 
@@ -88,7 +88,7 @@ export function AddHistoricalPriceDialog({ earliestKnownPrice }: { earliestKnown
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -97,17 +97,17 @@ export function AddHistoricalPriceDialog({ earliestKnownPrice }: { earliestKnown
         }
       }}
     >
-      <DialogTrigger asChild>
+      <ResponsiveDialogTrigger asChild>
         <Button variant="outline">+ Add earlier share price history</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add earlier share price history</DialogTitle>
-          <DialogDescription>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Add earlier share price history</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Extends the price history backward from {formatPeriodLabel(earliestKnownPrice.effectiveFrom)} — it won&rsquo;t change
             how any later month was priced.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {formError ? (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
@@ -147,14 +147,14 @@ export function AddHistoricalPriceDialog({ earliestKnownPrice }: { earliestKnown
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Saving…' : 'Save'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

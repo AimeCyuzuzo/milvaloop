@@ -4,7 +4,14 @@ import { useState } from 'react';
 import type { AnalyticsMemberRow } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 
 import { formatPeriodLabel } from '@/lib/contributions/format-period';
 
@@ -18,17 +25,17 @@ export function MemberDetailDialog({ member }: { member: AnalyticsMemberRow }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger asChild>
         <Button type="button" variant="ghost" size="sm">
           View
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{member.name}</DialogTitle>
-          <DialogDescription>{member.email}</DialogDescription>
-        </DialogHeader>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{member.name}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>{member.email}</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <PeriodStatusRows
           rows={member.periods.map((period) => ({
             key: period.period,
@@ -36,7 +43,7 @@ export function MemberDetailDialog({ member }: { member: AnalyticsMemberRow }) {
             period,
           }))}
         />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

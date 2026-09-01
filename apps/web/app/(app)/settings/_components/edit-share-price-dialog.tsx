@@ -9,7 +9,14 @@ import { updateSharePriceSchema, type SharePrice, type UpdateSharePriceInput } f
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { AmountInput } from '@milvaloop/ui/amount-input';
 import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 
 import { formatPeriodLabel } from '@/lib/contributions/format-period';
@@ -60,7 +67,7 @@ export function EditSharePriceDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -69,11 +76,11 @@ export function EditSharePriceDialog({
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit the price effective {formatPeriodLabel(price.effectiveFrom)}</DialogTitle>
-          <DialogDescription>Corrects this price point itself, rather than adding a new one.</DialogDescription>
-        </DialogHeader>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Edit the price effective {formatPeriodLabel(price.effectiveFrom)}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Corrects this price point itself, rather than adding a new one.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {price.usedByContributions ? (
           <Alert>
             <AlertDescription>
@@ -108,14 +115,14 @@ export function EditSharePriceDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Saving…' : 'Save'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

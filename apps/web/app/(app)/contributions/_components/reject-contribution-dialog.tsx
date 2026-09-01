@@ -6,7 +6,14 @@ import { toast } from 'sonner';
 import { rejectContributionSchema, type RejectContributionInput } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 
@@ -41,7 +48,7 @@ export function RejectContributionDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -50,11 +57,11 @@ export function RejectContributionDialog({
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Reject this contribution?</DialogTitle>
-          <DialogDescription>Say why — this is kept on the record alongside the entry.</DialogDescription>
-        </DialogHeader>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Reject this contribution?</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Say why — this is kept on the record alongside the entry.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <FormField
@@ -70,17 +77,17 @@ export function RejectContributionDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit" variant="destructive" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Rejecting…' : 'Reject'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

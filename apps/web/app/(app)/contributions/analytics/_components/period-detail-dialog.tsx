@@ -4,7 +4,14 @@ import { useState } from 'react';
 import type { AnalyticsMemberRow, AnalyticsPeriodRow } from '@milvaloop/types';
 
 import { Button } from '@milvaloop/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from '@milvaloop/ui/responsive-dialog';
 
 import { formatPeriodLabel } from '@/lib/contributions/format-period';
 
@@ -24,21 +31,21 @@ export function PeriodDetailDialog({ period, members }: { period: AnalyticsPerio
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger asChild>
         <Button type="button" variant="ghost" size="sm">
           View
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{formatPeriodLabel(period.period)}</DialogTitle>
-          <DialogDescription>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{formatPeriodLabel(period.period)}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             {period.totalMembers} member{period.totalMembers === 1 ? '' : 's'}
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <PeriodStatusRows rows={rows} />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

@@ -8,7 +8,14 @@ import { unapproveContributionSchema, type ContributionListItem, type UnapproveC
 
 import { Button } from '@milvaloop/ui/button';
 import { ConfirmDialog } from '@milvaloop/ui/confirm-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@milvaloop/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 import { Typography } from '@milvaloop/ui/typography';
@@ -112,7 +119,7 @@ function BulkRejectDialog({
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -121,13 +128,13 @@ function BulkRejectDialog({
         }
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             Reject {ids.length} contribution{ids.length === 1 ? '' : 's'}?
-          </DialogTitle>
-          <DialogDescription>Say why — this is kept on the record alongside each entry.</DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Say why — this is kept on the record alongside each entry.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <FormField
@@ -156,17 +163,17 @@ function BulkRejectDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit" variant="destructive" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Rejecting…' : 'Reject'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
