@@ -1,7 +1,31 @@
 import {
   computeWaterfallAllocations,
+  nextPeriod,
+  previousPeriod,
   type OutstandingPeriod,
 } from './contributions-waterfall';
+
+describe('nextPeriod / previousPeriod', () => {
+  it('nextPeriod advances to the first of the following month', () => {
+    expect(nextPeriod('2026-08-01')).toBe('2026-09-01');
+  });
+
+  it('nextPeriod rolls over the year boundary', () => {
+    expect(nextPeriod('2026-12-01')).toBe('2027-01-01');
+  });
+
+  it('previousPeriod steps back to the first of the prior month', () => {
+    expect(previousPeriod('2026-09-01')).toBe('2026-08-01');
+  });
+
+  it('previousPeriod rolls back over the year boundary', () => {
+    expect(previousPeriod('2027-01-01')).toBe('2026-12-01');
+  });
+
+  it('previousPeriod undoes nextPeriod', () => {
+    expect(previousPeriod(nextPeriod('2026-03-01'))).toBe('2026-03-01');
+  });
+});
 
 describe('computeWaterfallAllocations', () => {
   it('allocates an exact single-share payment to one untouched period', () => {

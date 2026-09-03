@@ -30,7 +30,7 @@ import {
   useUpdateProfileMutation,
 } from '@/lib/auth/use-auth-mutations';
 import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
-import { useUpdateReminderPauseMutation } from '@/lib/members/use-members-mutations';
+import { useUpdateDigestPauseMutation, useUpdateReminderPauseMutation } from '@/lib/members/use-members-mutations';
 import { useMyMembership } from '@/lib/members/use-my-membership';
 
 // The sidebar's own header/footer (CooperativeSwitcher, AccountMenu) are
@@ -211,6 +211,7 @@ export default function AccountPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const myMembership = useMyMembership();
   const updateReminderPause = useUpdateReminderPauseMutation();
+  const updateDigestPause = useUpdateDigestPauseMutation();
 
   const form = useForm<ChangePasswordInput>({
     resolver: zodResolver(changePasswordSchema),
@@ -238,6 +239,18 @@ export default function AccountPage() {
     try {
       await updateReminderPause.mutateAsync({ membershipId: myMembership.membershipId, paused: !enabled });
       toast.success(enabled ? 'Reminders resumed.' : 'Reminders paused.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  async function handleToggleDigest(enabled: boolean) {
+    if (!myMembership) {
+      return;
+    }
+    try {
+      await updateDigestPause.mutateAsync({ membershipId: myMembership.membershipId, paused: !enabled });
+      toast.success(enabled ? 'Monthly digest resumed.' : 'Monthly digest paused.');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -300,21 +313,41 @@ export default function AccountPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Contribution reminders</CardTitle>
-          <CardDescription>Get a nudge by email when a monthly contribution is due soon or overdue.</CardDescription>
+          <CardTitle>Email preferences</CardTitle>
+          <CardDescription>Choose which emails MilvaLoop sends you.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {!myMembership ? (
             <Skeleton className="h-6 w-full" />
           ) : (
-            <div className="flex items-center justify-between gap-4">
-              <Typography variant="small">Email me contribution reminders</Typography>
-              <Switch
-                checked={myMembership.remindersPausedAt === null}
-                onCheckedChange={handleToggleReminders}
-                disabled={updateReminderPause.isPending}
-              />
-            </div>
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Typography variant="small">Contribution reminders</Typography>
+                  <Typography variant="small" color="muted">
+                    A nudge when a monthly contribution is due soon or overdue.
+                  </Typography>
+                </div>
+                <Switch
+                  checked={myMembership.remindersPausedAt === null}
+                  onCheckedChange={handleToggleReminders}
+                  disabled={updateReminderPause.isPending}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Typography variant="small">Monthly digest</Typography>
+                  <Typography variant="small" color="muted">
+                    A summary of the cooperative&rsquo;s numbers each month.
+                  </Typography>
+                </div>
+                <Switch
+                  checked={myMembership.digestPausedAt === null}
+                  onCheckedChange={handleToggleDigest}
+                  disabled={updateDigestPause.isPending}
+                />
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

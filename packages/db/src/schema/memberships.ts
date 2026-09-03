@@ -36,11 +36,16 @@ export const memberships = pgTable(
     // not disappear with the row. Every query that lists "current members"
     // filters removedAt IS NULL.
     removedAt: timestamp('removed_at', { withTimezone: true }),
-    // Set by an admin to quietly exempt this member from the automated
-    // contribution-reminder cron (illness, hardship, a known in-person
-    // arrangement) without a formal waiver flow. Checked only by that job —
-    // it has no other effect.
+    // A member's own preference, set by themselves — not an admin lever
+    // (see MembersService.updateReminderPause) — for whether the automated
+    // contribution-reminder cron emails them. Checked only by that job — it
+    // has no other effect.
     remindersPausedAt: timestamp('reminders_paused_at', { withTimezone: true }),
+    // Same idiom as remindersPausedAt above, but for the monthly cooperative-
+    // wide digest (see MonthlyDigestService) rather than personal payment
+    // nags — kept as its own column rather than reusing remindersPausedAt
+    // since a member may want one email without the other.
+    digestPausedAt: timestamp('digest_paused_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -45,6 +45,15 @@ const DESCRIBERS: Record<string, Describer> = {
   'member.removed': (event) => `${actorLabel(event)} removed ${subjectLabel(event)}`,
   'member.reminders_paused': (event) => `${actorLabel(event)} paused contribution reminders for ${subjectLabel(event)}`,
   'member.reminders_resumed': (event) => `${actorLabel(event)} resumed contribution reminders for ${subjectLabel(event)}`,
+  'member.digest_paused': (event) => `${actorLabel(event)} paused the monthly digest for ${subjectLabel(event)}`,
+  'member.digest_resumed': (event) => `${actorLabel(event)} resumed the monthly digest for ${subjectLabel(event)}`,
+  'digest.sent': (event) => {
+    const period = stringField(event.metadata, 'period');
+    const recipientCount = numberField(event.metadata, 'recipientCount');
+    const periodClause = period ? ` for ${formatPeriodLabel(period)}` : '';
+    const recipientClause = recipientCount !== undefined ? ` to ${recipientCount} member${recipientCount === 1 ? '' : 's'}` : '';
+    return `Monthly digest sent${periodClause}${recipientClause}`;
+  },
   'contribution.share_price_set': (event) => {
     const amount = numberField(event.metadata, 'amount');
     const effectiveFrom = stringField(event.metadata, 'effectiveFrom');

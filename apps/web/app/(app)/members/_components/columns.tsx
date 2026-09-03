@@ -34,6 +34,7 @@ function StatusBadges({ member }: { member: MemberListItem }) {
       <div className="flex flex-wrap gap-1">
         <Badge variant="successSoft">Active</Badge>
         {member.remindersPausedAt ? <Badge variant="outline">Reminders paused</Badge> : null}
+        {member.digestPausedAt ? <Badge variant="outline">Digest paused</Badge> : null}
       </div>
     );
   }

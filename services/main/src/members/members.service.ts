@@ -92,6 +92,7 @@ export class MembersService {
         joinedAt: memberships.createdAt,
         memberSince: memberships.memberSince,
         remindersPausedAt: memberships.remindersPausedAt,
+        digestPausedAt: memberships.digestPausedAt,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
@@ -150,6 +151,7 @@ export class MembersService {
           joinedAt: row.joinedAt.toISOString(),
           memberSince: row.memberSince,
           remindersPausedAt: row.remindersPausedAt?.toISOString() ?? null,
+          digestPausedAt: row.digestPausedAt?.toISOString() ?? null,
         })),
         ...inviteRows.map((row) => ({
           status: 'invited' as const,
@@ -661,6 +663,64 @@ export class MembersService {
         tenantId,
         actorUserId,
         action: paused ? 'member.reminders_paused' : 'member.reminders_resumed',
+        entityType: 'membership',
+        entityId: membershipId,
+        metadata: { name: membership.name, email: membership.email },
+      });
+    });
+  }
+
+  // Same shape and the same self-only rule as updateReminderPause above,
+  // but for the monthly cooperative-wide digest (see MonthlyDigestService)
+  // rather than personal payment reminders — a separate column so a
+  // member can keep one email without the other.
+  async updateDigestPause(
+    tenantId: string,
+    actorUserId: string,
+    membershipId: string,
+    paused: boolean,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const [membership] = await tx
+        .select({
+          userId: memberships.userId,
+          digestPausedAt: memberships.digestPausedAt,
+          name: users.name,
+          email: users.email,
+        })
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
+        .where(
+          and(
+            eq(memberships.id, membershipId),
+            eq(memberships.tenantId, tenantId),
+            isNull(memberships.removedAt),
+          ),
+        )
+        .limit(1);
+      if (!membership) {
+        throw new NotFoundException('No active member found');
+      }
+      if (membership.userId !== actorUserId) {
+        throw new ForbiddenException(
+          'You can only manage your own digest preference',
+        );
+      }
+
+      const isCurrentlyPaused = membership.digestPausedAt !== null;
+      if (isCurrentlyPaused === paused) {
+        return;
+      }
+
+      await tx
+        .update(memberships)
+        .set({ digestPausedAt: paused ? new Date() : null })
+        .where(eq(memberships.id, membershipId));
+
+      await this.auditLog.record(tx, {
+        tenantId,
+        actorUserId,
+        action: paused ? 'member.digest_paused' : 'member.digest_resumed',
         entityType: 'membership',
         entityId: membershipId,
         metadata: { name: membership.name, email: membership.email },
