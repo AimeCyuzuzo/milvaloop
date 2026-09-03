@@ -21,6 +21,16 @@ export function nextPeriod(period: string): string {
   return `${next.getUTCFullYear()}-${nextMonth}-01`;
 }
 
+// The first day of the calendar month before `period` — month - 2 in
+// Date.UTC's 0-indexed argument lands one month behind `period`'s own
+// 1-indexed month, the mirror image of nextPeriod's month/no-adjustment.
+export function previousPeriod(period: string): string {
+  const [year, month] = period.split('-').map(Number);
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  const previousMonth = String(previous.getUTCMonth() + 1).padStart(2, '0');
+  return `${previous.getUTCFullYear()}-${previousMonth}-01`;
+}
+
 // Fills each period's remaining gap (dueAmount - alreadyPaid) in order,
 // oldest first, never taking more than one period's gap by default — a
 // surplus always rolls forward into the next period rather than stacking a

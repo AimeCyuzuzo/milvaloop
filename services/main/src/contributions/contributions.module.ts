@@ -6,6 +6,7 @@ import { ExportModule } from '../export/export.module';
 import { ContributionReminderService } from './contribution-reminders.service';
 import { ContributionsController } from './contributions.controller';
 import { ContributionsService } from './contributions.service';
+import { MonthlyDigestService } from './monthly-digest.service';
 
 @Module({
   // JwtModule.register({}) repeated here for the same reason as
@@ -14,6 +15,10 @@ import { ContributionsService } from './contributions.service';
   // against this module too, not just AuthModule's.
   imports: [AuthModule, JwtModule.register({}), ExportModule],
   controllers: [ContributionsController],
-  providers: [ContributionsService, ContributionReminderService],
+  providers: [
+    ContributionsService,
+    ContributionReminderService,
+    MonthlyDigestService,
+  ],
 })
 export class ContributionsModule {}

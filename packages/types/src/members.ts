@@ -60,6 +60,13 @@ export type UpdateMemberPermissionsInput = z.infer<typeof updateMemberPermission
 export const updateReminderPauseSchema = z.object({ paused: z.boolean() });
 export type UpdateReminderPauseInput = z.infer<typeof updateReminderPauseSchema>;
 
+// PATCH /members/:membershipId/digest — same shape and the same
+// self-only rule as updateReminderPauseSchema above, but for the monthly
+// cooperative-wide digest (see MonthlyDigestService) rather than personal
+// payment reminders.
+export const updateDigestPauseSchema = z.object({ paused: z.boolean() });
+export type UpdateDigestPauseInput = z.infer<typeof updateDigestPauseSchema>;
+
 export const membershipIdParamSchema = z.object({ membershipId: z.uuid() });
 export type MembershipIdParam = z.infer<typeof membershipIdParamSchema>;
 
@@ -126,6 +133,7 @@ export const activeMemberSchema = z.object({
   joinedAt: z.iso.datetime(),
   memberSince: memberSinceSchema,
   remindersPausedAt: z.iso.datetime().nullable(),
+  digestPausedAt: z.iso.datetime().nullable(),
 });
 export type ActiveMember = z.infer<typeof activeMemberSchema>;
 

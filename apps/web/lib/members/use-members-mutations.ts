@@ -9,6 +9,7 @@ import type {
   MemberImportPreview,
   MemberImportResult,
   PendingInvite,
+  UpdateDigestPauseInput,
   UpdateMemberPermissionsInput,
   UpdateReminderPauseInput,
 } from '@milvaloop/types';
@@ -96,6 +97,16 @@ export function useUpdateReminderPauseMutation() {
   return useMutation({
     mutationFn: ({ membershipId, ...input }: UpdateReminderPauseInput & { membershipId: string }) =>
       apiFetch<void>(`/members/${membershipId}/reminders`, { method: 'PATCH', body: JSON.stringify(input) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
+  });
+}
+
+export function useUpdateDigestPauseMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ membershipId, ...input }: UpdateDigestPauseInput & { membershipId: string }) =>
+      apiFetch<void>(`/members/${membershipId}/digest`, { method: 'PATCH', body: JSON.stringify(input) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY }),
   });
 }

@@ -50,6 +50,13 @@
       "when": 1787763268442,
       "tag": "0006_amused_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788455929140,
+      "tag": "0007_thankful_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

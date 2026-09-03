@@ -27,6 +27,7 @@ import {
   memberImportMappingSchema,
   membershipIdParamSchema,
   membershipInviteIdParamSchema,
+  updateDigestPauseSchema,
   updateMemberPermissionsSchema,
   updateReminderPauseSchema,
   PERMISSIONS,
@@ -39,6 +40,7 @@ import {
   type MemberImportMapping,
   type MembershipIdParam,
   type MembershipInviteIdParam,
+  type UpdateDigestPauseInput,
   type UpdateMemberPermissionsInput,
   type UpdateReminderPauseInput,
 } from '@milvaloop/types';
@@ -233,6 +235,26 @@ export class MembersController {
     body: UpdateReminderPauseInput,
   ) {
     await this.membersService.updateReminderPause(
+      claims.tenantId,
+      claims.sub,
+      params.membershipId,
+      body.paused,
+    );
+  }
+
+  // Same self-only shape as updateReminderPause above, but for the
+  // monthly digest (see MembersService.updateDigestPause).
+  @Patch(':membershipId/digest')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  async updateDigestPause(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(membershipIdParamSchema))
+    params: MembershipIdParam,
+    @Body(new ZodValidationPipe(updateDigestPauseSchema))
+    body: UpdateDigestPauseInput,
+  ) {
+    await this.membersService.updateDigestPause(
       claims.tenantId,
       claims.sub,
       params.membershipId,
