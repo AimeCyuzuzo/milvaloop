@@ -81,7 +81,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         name={session.user.name}
       />
       <SidebarInset>
-        <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4">
+        {/* Sticky and translucent below md — a fixed nav bar riding above
+            scrolling content is the native pattern; above md the sidebar
+            already gives that persistent orientation, so the header stays
+            a plain, static part of the page like before. */}
+        <header className="bg-background/85 supports-[backdrop-filter]:backdrop-blur-md sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-4 md:static md:h-20 md:bg-background md:backdrop-blur-none">
           {/* Opening the sidebar's own drawer is a desktop/tablet-rail
               affordance now — below md there's nothing to trigger, the
               bottom tab bar is the sole nav. */}

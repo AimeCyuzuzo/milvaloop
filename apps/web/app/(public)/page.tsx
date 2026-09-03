@@ -26,7 +26,7 @@ const STEPS = [
   },
   {
     title: 'Record and track together',
-    description: 'Log contributions and approvals as a team, with the full history kept automatically.',
+    description: 'Log contributions and approve them as a team, with the full history kept automatically.',
   },
 ];
 
@@ -40,37 +40,32 @@ const FEATURES = [
   },
   {
     icon: Clock,
-    title: 'A full history, always',
-    description:
-      'Every contribution, approval, and correction is kept. Anyone can see how a number was reached, not just what it currently is.',
+    title: 'Full history of every change',
+    description: 'Every contribution, approval, and correction is saved, along with when it happened and who made it.',
     featured: false,
   },
   {
     icon: BarChart3,
-    title: 'Analytics that explain themselves',
-    description:
-      'Compliance rates, outstanding balances, and loan portfolios — with clear definitions, not confusing dashboards.',
+    title: 'Clear analytics',
+    description: 'Compliance rates, outstanding balances, and loan totals, each shown with a plain definition of what it means.',
     featured: false,
   },
   {
     icon: ShieldCheck,
-    title: 'Approvals, not arbitrary edits',
-    description:
-      'Contributions, loans, and corrections move through a controlled approval workflow, so every change is traceable to a person and a reason.',
+    title: 'Approval workflow',
+    description: 'Contributions, loans, and corrections go through approval before they count. Every change is linked to who made it and why.',
     featured: false,
   },
   {
     icon: Vote,
     title: 'Governance built in',
-    description:
-      'Run proposals, votes, meetings, and resolutions inside the same system — decisions stay linked to the records they affect.',
+    description: 'Run proposals, votes, meetings, and resolutions in the same system, linked to the records they affect.',
     featured: false,
   },
   {
     icon: TrendingUp,
-    title: 'See growth patterns over time',
-    description:
-      'Track how membership, contributions, and shares grow month over month, so decisions are based on trends, not guesswork.',
+    title: 'Growth over time',
+    description: 'Track how membership, contributions, and shares change from month to month.',
     featured: false,
   },
 ];
@@ -82,11 +77,10 @@ export default function HomePage() {
         <Card className="bg-transparent relative h-[75vh] overflow-hidden rounded-xl  p-6">
           <div className="flex flex-col gap-5 justify-center max-w-7/12 mx-auto text-center absolute top-[40%] left-1/2 -translate-1/2">
             <Typography variant="h1" className="w-full">
-              A cooperative doesn&apos;t have to rely on one person&apos;s memory
+              Track contributions and shares for your cooperative
             </Typography>
             <Typography variant="small" color="muted" className="mt-2 block">
-              Use MilvaLoop to keep everyone on the same page, with analytics available at any time, so
-              you can make informed decisions together.
+              One system for your whole team, with a record of who approved each contribution and when.
             </Typography>
             <Link href="/auth/signup" className="">
               <Button size="3xl">Get Started</Button>
@@ -100,10 +94,10 @@ export default function HomePage() {
         <WavyLine className="text-primary/10 pointer-events-none absolute top-6 left-1/2 h-10 w-72 -translate-x-1/2" />
         <Reveal className="relative mx-auto max-w-2xl text-center">
           <Typography variant="h3" as="h2" className="sm:text-3xl font-normal">
-            It&apos;s not just a treasurer problem
+            Every cooperative runs into the same problem
           </Typography>
           <Typography variant="small" color="muted" className="mt-3 block">
-            It&apos;s a team problem — one that shows up the same way in every cooperative.
+            Records end up depending on one person, and everyone else has no way to check them.
           </Typography>
         </Reveal>
         <div className="relative mx-auto mt-10 grid max-w-4xl gap-6 sm:grid-cols-3">
@@ -158,11 +152,10 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-6xl px-6 py-20">
           <Reveal className="mx-auto max-w-2xl text-center">
             <Typography variant="h3" as="h2" className="sm:text-3xl font-normal">
-              Everything your cooperative needs to explain itself
+              What MilvaLoop tracks for your cooperative
             </Typography>
             <Typography variant="small" color="muted" className="mt-3 block">
-              Tracking made easy, history kept automatically, and analytics that show where
-              you&apos;re growing.
+              Contributions, shares, and the approvals behind them, all kept with a full history.
             </Typography>
           </Reveal>
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -192,11 +185,10 @@ export default function HomePage() {
         <CornerBrackets className="text-primary/15 pointer-events-none absolute inset-6 hidden sm:block" />
         <Reveal className="relative">
           <Typography variant="h3" as="p" className="text-2xl sm:text-4xl font-normal text-balance">
-            Every number your cooperative shows should be explainable — not just displayed, but
-            traceable to the event that produced it.
+            Every number in MilvaLoop can be traced back to who recorded it, when, and why.
           </Typography>
           <Typography variant="small" color="muted" className="mt-6 block">
-            That&apos;s the idea MilvaLoop is built around.
+            This applies to every contribution, share, and approval in the system.
           </Typography>
         </Reveal>
       </section>

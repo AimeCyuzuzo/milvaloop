@@ -12,7 +12,7 @@ import { useMemberSummaryQuery } from '@/lib/contributions/use-member-summary-qu
 import { useMyMembershipId } from '@/lib/members/use-my-membership';
 import { useMembersQuery } from '@/lib/members/use-members-query';
 
-import { PeriodStatusRows } from './period-status-rows';
+import { PeriodHistory } from './period-history';
 
 // Shares owned and monthly compliance are shown as two independent facts,
 // never folded into one number — someone can own many shares and still be
@@ -84,7 +84,7 @@ export function MemberSummaryCard() {
               </div>
             </div>
 
-            <PeriodStatusRows
+            <PeriodHistory
               rows={summary.periods.map((period) => ({
                 key: period.period,
                 label: formatPeriodLabel(period.period),
