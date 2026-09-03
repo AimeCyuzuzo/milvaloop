@@ -182,7 +182,7 @@ export class ContributionReminderService {
     triggers: ReminderTrigger[],
   ): Promise<boolean> {
     const [member] = await this.db
-      .select({ email: users.email })
+      .select({ name: users.name, email: users.email })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(memberships.id, membershipId))
@@ -213,7 +213,7 @@ export class ContributionReminderService {
 
     const { html, text } = await renderEmail(
       ContributionReminderEmail({
-        memberName: member.email,
+        memberName: member.name,
         cooperativeName: tenant.name,
         reminderKind,
         outstandingPeriods: outstandingForEmail,
