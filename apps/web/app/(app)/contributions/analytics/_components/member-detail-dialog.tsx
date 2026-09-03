@@ -15,7 +15,7 @@ import {
 
 import { formatPeriodLabel } from '@/lib/contributions/format-period';
 
-import { PeriodStatusRows } from '../../_components/period-status-rows';
+import { PeriodHistory } from '../../_components/period-history';
 
 // A member row's own drill-down: their full period-by-period history,
 // already included on the row itself (see
@@ -36,7 +36,7 @@ export function MemberDetailDialog({ member }: { member: AnalyticsMemberRow }) {
           <ResponsiveDialogTitle>{member.name}</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>{member.email}</ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-        <PeriodStatusRows
+        <PeriodHistory
           rows={member.periods.map((period) => ({
             key: period.period,
             label: formatPeriodLabel(period.period),

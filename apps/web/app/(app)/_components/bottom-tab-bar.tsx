@@ -38,7 +38,7 @@ export function BottomTabBar() {
   return (
     <nav
       aria-label="Primary"
-      className="bg-sidebar fixed inset-x-0 bottom-0 z-40 flex justify-around border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="bg-sidebar/85 supports-[backdrop-filter]:backdrop-blur-md fixed inset-x-0 bottom-0 z-40 flex justify-around border-t pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       {BOTTOM_NAV_ITEMS.map((item) => {
         const isActive = item.href === activeHref;
@@ -48,11 +48,17 @@ export function BottomTabBar() {
             href={item.href}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-xs font-medium',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              'flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-xs',
+              isActive ? 'text-primary font-semibold' : 'text-muted-foreground font-medium',
             )}
           >
-            <item.icon className="size-5" strokeWidth={isActive ? 2.25 : 1.75} />
+            {/* A color change alone reads as a hover state, not a
+                selection — the pill behind the icon is what actually
+                signals "you are here", the same way a native tab bar's
+                selected item gets its own filled shape. */}
+            <span className={cn('flex items-center justify-center rounded-full px-3.5 py-1 transition-colors', isActive && 'bg-primary/15')}>
+              <item.icon className="size-5" strokeWidth={isActive ? 2.25 : 1.75} />
+            </span>
             {item.label}
           </Link>
         );
