@@ -162,12 +162,18 @@ describe('Monthly digest (e2e)', () => {
       founderMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founder.accessToken, SHARE_PRICE, previousCalendarPeriod());
+    await setSharePrice(
+      founder.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
     clearSentEmails();
 
     await digestService.sendMonthlyDigests();
 
-    const digestEmails = sentEmails.filter((email) => email.to === FOUNDER.email);
+    const digestEmails = sentEmails.filter(
+      (email) => email.to === FOUNDER.email,
+    );
     expect(digestEmails).toHaveLength(1);
     expect(digestEmails[0]?.subject).toContain('summary');
 
@@ -183,13 +189,19 @@ describe('Monthly digest (e2e)', () => {
       founderMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founder.accessToken, SHARE_PRICE, previousCalendarPeriod());
+    await setSharePrice(
+      founder.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
     clearSentEmails();
 
     await digestService.sendMonthlyDigests();
     await digestService.sendMonthlyDigests();
 
-    const digestEmails = sentEmails.filter((email) => email.to === FOUNDER.email);
+    const digestEmails = sentEmails.filter(
+      (email) => email.to === FOUNDER.email,
+    );
     expect(digestEmails).toHaveLength(1);
     const rows = await testDb.db.select().from(schema.monthlyDigests);
     expect(rows).toHaveLength(1);
@@ -202,14 +214,24 @@ describe('Monthly digest (e2e)', () => {
       founderMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founder.accessToken, SHARE_PRICE, previousCalendarPeriod());
-    const pauseResponse = await pauseDigest(founder.accessToken, founderMembershipId, true);
+    await setSharePrice(
+      founder.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
+    const pauseResponse = await pauseDigest(
+      founder.accessToken,
+      founderMembershipId,
+      true,
+    );
     expect(pauseResponse.status).toBe(204);
     clearSentEmails();
 
     await digestService.sendMonthlyDigests();
 
-    expect(sentEmails.filter((email) => email.to === FOUNDER.email)).toHaveLength(0);
+    expect(
+      sentEmails.filter((email) => email.to === FOUNDER.email),
+    ).toHaveLength(0);
     // Still recorded as sent — a paused member shouldn't cause the whole
     // tenant to be re-processed (and re-emailed to everyone else) forever.
     const rows = await testDb.db.select().from(schema.monthlyDigests);
@@ -223,16 +245,26 @@ describe('Monthly digest (e2e)', () => {
       founderMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founder.accessToken, SHARE_PRICE, previousCalendarPeriod());
+    await setSharePrice(
+      founder.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
     await pauseDigest(founder.accessToken, founderMembershipId, true);
 
-    const resumeResponse = await pauseDigest(founder.accessToken, founderMembershipId, false);
+    const resumeResponse = await pauseDigest(
+      founder.accessToken,
+      founderMembershipId,
+      false,
+    );
     expect(resumeResponse.status).toBe(204);
     clearSentEmails();
 
     await digestService.sendMonthlyDigests();
 
-    expect(sentEmails.filter((email) => email.to === FOUNDER.email)).toHaveLength(1);
+    expect(
+      sentEmails.filter((email) => email.to === FOUNDER.email),
+    ).toHaveLength(1);
   });
 
   it("never mixes another tenant's members into a run", async () => {
@@ -242,7 +274,11 @@ describe('Monthly digest (e2e)', () => {
       founderAMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founderA.accessToken, SHARE_PRICE, previousCalendarPeriod());
+    await setSharePrice(
+      founderA.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
 
     const founderB = await signupFounder({
       email: 'founder-b@example.com',
@@ -253,12 +289,20 @@ describe('Monthly digest (e2e)', () => {
       founderBMembershipId,
       new Date(`${previousCalendarPeriod()}T00:00:00.000Z`),
     );
-    await setSharePrice(founderB.accessToken, SHARE_PRICE, previousCalendarPeriod());
+    await setSharePrice(
+      founderB.accessToken,
+      SHARE_PRICE,
+      previousCalendarPeriod(),
+    );
     clearSentEmails();
 
     await digestService.sendMonthlyDigests();
 
-    expect(sentEmails.filter((email) => email.to === founderA.user.email)).toHaveLength(1);
-    expect(sentEmails.filter((email) => email.to === founderB.user.email)).toHaveLength(1);
+    expect(
+      sentEmails.filter((email) => email.to === founderA.user.email),
+    ).toHaveLength(1);
+    expect(
+      sentEmails.filter((email) => email.to === founderB.user.email),
+    ).toHaveLength(1);
   });
 });
