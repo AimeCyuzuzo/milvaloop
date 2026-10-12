@@ -7,8 +7,25 @@ import { Badge } from '@milvaloop/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader, CardDescription } from '@milvaloop/ui/card';
 import { Typography } from '@milvaloop/ui/typography';
 
+interface PricingPlan {
+  name: string;
+  price: string;
+  period: string;
+  // Only Premium has a second cadence to show — monthly is the default,
+  // this is the discounted once-a-year alternative shown right below it.
+  annualPrice?: string;
+  description: string;
+  features: string[];
+  cta: string;
+  highlighted: boolean;
+  // Free's signup and Premium's are the same form (see
+  // apps/web/app/auth/signup/page.tsx) — only Premium's carries ?plan=,
+  // which is what actually starts its free trial at signup.
+  signupHref: string;
+}
+
 const TITLE = 'Pricing';
-const DESCRIPTION = 'Try MilvaLoop free for 2 months, then pick the plan that fits your cooperative.';
+const DESCRIPTION = 'Free for cooperatives with up to 10 members, or try Premium free for 2 months.';
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -27,49 +44,37 @@ export const metadata: Metadata = {
   },
 };
 
-const PLANS = [
+const PLANS: PricingPlan[] = [
   {
-    name: 'Free trial',
-    price: '$0',
-    period: 'for 2 months',
-    description: 'Full access, no credit card required. See if MilvaLoop fits your cooperative.',
+    name: 'Free',
+    price: 'Free',
+    period: 'up to 10 members',
+    description: 'For a small cooperative, free with no time limit.',
     features: [
-      'Unlimited members',
+      'Up to 10 members',
       'Contributions, shares, and obligations',
       'Approval workflow and audit trail',
-      'Email reminders and notifications',
+      'Email reminders and monthly digest',
+      'Analytics and reports',
     ],
-    cta: 'Start free trial',
+    cta: 'Start for free',
     highlighted: false,
+    signupHref: '/auth/signup',
   },
   {
-    name: 'Standard',
-    price: '$39',
-    period: 'per month, per cooperative',
-    description: 'Everything a running cooperative needs, billed monthly after your trial ends.',
+    name: 'Premium',
+    price: '12,000 RWF',
+    period: 'per month, up to 30 members',
+    annualPrice: '115,000 RWF billed annually',
+    description: 'For a growing cooperative. Free for the first 2 months, then billed monthly.',
     features: [
-      'Everything in the free trial',
-      'Governance: proposals, voting, resolutions',
-      'Loan applications and repayment tracking',
-      'Meetings, minutes, and action items',
-      'Standard analytics and reports',
+      'Everything in Free',
+      'Up to 30 members',
+      '+5,000 RWF/month for every 10 members beyond 30',
     ],
     cta: 'Start free trial',
     highlighted: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: 'for federations & multi-cooperative groups',
-    description: 'For organizations managing several cooperatives or with dedicated support needs.',
-    features: [
-      'Everything in Standard',
-      'Multiple cooperatives, one account',
-      'Custom roles and approval rules',
-      'Dedicated onboarding and support',
-    ],
-    cta: 'Contact us',
-    highlighted: false,
+    signupHref: '/auth/signup?plan=premium',
   },
 ];
 
@@ -77,12 +82,17 @@ const FAQS = [
   {
     question: 'What happens after the 2-month free trial?',
     answer:
-      'You can move to the Standard plan to keep everything you\'ve set up, or export your records and stop — nothing is locked in.',
+      'You keep everything you\'ve set up and move to paid Premium billing. If your cooperative has 10 members or fewer, you can switch to the Free plan instead and never be billed.',
   },
   {
-    question: 'Do you charge per member?',
+    question: 'How does pricing scale with members?',
     answer:
-      'No. Pricing is per cooperative, not per member, so adding members never increases your bill.',
+      'Free covers up to 10 members. Premium starts at 12,000 RWF/month for up to 30 members, then adds 5,000 RWF/month for every 10 additional members — a 40-member cooperative pays 17,000 RWF/month.',
+  },
+  {
+    question: 'Can I pay annually instead of monthly?',
+    answer:
+      'Yes. Annual billing works out to about 20% less than paying monthly — Premium at the base tier is 115,000 RWF billed once a year, instead of 12,000 RWF billed each month.',
   },
   {
     question: 'Can I cancel anytime?',
@@ -96,11 +106,11 @@ export default function PricingPage() {
       <div className="text-center">
         <Typography variant="h1">Simple pricing for your cooperative</Typography>
         <Typography variant="muted" className="mx-auto mt-4 max-w-xl">
-          Start free for 2 months. No credit card required, no per-member fees.
+          Free for cooperatives with 10 or fewer members. Premium includes a 2-month free trial.
         </Typography>
       </div>
 
-      <div className="mt-14 grid gap-6 lg:grid-cols-3">
+      <div className="mx-auto mt-14 grid max-w-3xl gap-6 sm:grid-cols-2">
         {PLANS.map((plan) => (
           <Card key={plan.name} variant={plan.highlighted ? 'highlighted' : 'default'}>
             <CardHeader>
@@ -115,6 +125,11 @@ export default function PricingPage() {
                   {plan.period}
                 </Typography>
               </div>
+              {plan.annualPrice ? (
+                <Typography variant="muted" className="mt-1 block">
+                  or {plan.annualPrice}
+                </Typography>
+              ) : null}
             </CardHeader>
             <CardContent>
               <ul className="space-y-3 text-sm">
@@ -128,7 +143,7 @@ export default function PricingPage() {
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant={plan.highlighted ? 'default' : 'outline'} asChild>
-                <Link href={plan.name === 'Enterprise' ? '/about' : '/auth/signup'}>{plan.cta}</Link>
+                <Link href={plan.signupHref}>{plan.cta}</Link>
               </Button>
             </CardFooter>
           </Card>

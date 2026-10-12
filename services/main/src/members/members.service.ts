@@ -23,6 +23,7 @@ import {
   type Mailer,
 } from '@milvaloop/email';
 import {
+  FREE_PLAN_MEMBER_CAP,
   PERMISSIONS,
   type AcceptInviteInput,
   type AddPlaceholderMemberInput,
@@ -181,11 +182,52 @@ export class MembersService {
     };
   }
 
+  // Counts active members plus already-pending invites — a Free-plan
+  // tenant is blocked from *starting* an eleventh addition, not surprised
+  // later when someone finally accepts an invite sent while still under
+  // the cap (see FREE_PLAN_MEMBER_CAP). A no-op for Premium, which has no
+  // member ceiling — see tenant-access.ts, scaling there is a billing fact
+  // communicated on the pricing page, not something this app enforces.
+  private async assertUnderFreePlanCap(tenantId: string): Promise<void> {
+    const [tenant] = await this.db
+      .select({ plan: tenants.plan })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (tenant?.plan !== 'free') {
+      return;
+    }
+
+    const activeRows = await this.db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(eq(memberships.tenantId, tenantId), isNull(memberships.removedAt)),
+      );
+    const pendingRows = await this.db
+      .select({ id: membershipInvites.id })
+      .from(membershipInvites)
+      .where(
+        and(
+          eq(membershipInvites.tenantId, tenantId),
+          isNull(membershipInvites.consumedAt),
+        ),
+      );
+
+    if (activeRows.length + pendingRows.length >= FREE_PLAN_MEMBER_CAP) {
+      throw new ForbiddenException(
+        `The Free plan is limited to ${FREE_PLAN_MEMBER_CAP} members — upgrade to Premium to add more.`,
+      );
+    }
+  }
+
   async invite(
     tenantId: string,
     invitedByUserId: string,
     input: InviteMemberInput,
   ): Promise<PendingInvite> {
+    await this.assertUnderFreePlanCap(tenantId);
+
     const rawToken = generateOpaqueToken();
     const expiresAt = new Date(Date.now() + parseTtlMs(INVITE_TTL));
 
@@ -287,6 +329,8 @@ export class MembersService {
     actorUserId: string,
     input: AddPlaceholderMemberInput,
   ): Promise<void> {
+    await this.assertUnderFreePlanCap(tenantId);
+
     const passwordHash = await argon2.hash(generateOpaqueToken());
     const syntheticEmail = `placeholder-${generateOpaqueToken().slice(0, 16)}@members.milvaloop.invalid`;
 

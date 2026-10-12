@@ -56,7 +56,7 @@ const organizationJsonLd = {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'USD',
-    description: '2-month free trial',
+    description: 'Free plan for up to 10 members; Premium includes a 2-month free trial',
   },
   brand: {
     '@type': 'Organization',

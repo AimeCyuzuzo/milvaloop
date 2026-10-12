@@ -201,7 +201,7 @@ export default function HomePage() {
               Give your cooperative a record everyone can trust
             </Typography>
             <Typography variant="small" className="text-primary-foreground/80 relative mx-auto mt-3 block max-w-xl">
-              Try MilvaLoop free for 2 months. No credit card required to get started.
+              Free for small cooperatives, or try Premium free for 2 months.
             </Typography>
             <Link href="/pricing" className="relative mt-8 inline-flex self-center">
               <Button size="lg" variant="secondary">

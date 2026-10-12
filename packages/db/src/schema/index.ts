@@ -12,3 +12,4 @@ export * from './contributions.js';
 export * from './contribution-allocations.js';
 export * from './contribution-reminders.js';
 export * from './monthly-digests.js';
+export * from './tenant-trial-reminders.js';

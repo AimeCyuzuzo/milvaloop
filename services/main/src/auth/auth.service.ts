@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -15,6 +16,7 @@ import {
   type Mailer,
 } from '@milvaloop/email';
 import {
+  getTenantAccessState,
   isReservedSlug,
   PERMISSIONS,
   slugify,
@@ -32,6 +34,7 @@ import {
   type SignupInput,
   type SlugPreviewResult,
   type SwitchCooperativeInput,
+  type TenantPlan,
   type UpdateProfileInput,
 } from '@milvaloop/types';
 import * as argon2 from 'argon2';
@@ -68,6 +71,11 @@ const PASSWORD_RESET_TTL = '1h';
 // this never leaves the browser (unlike magic-link/reset, it's never
 // emailed), so there's no reason to extend it further.
 const LOGIN_TICKET_TTL = '5m';
+// How far out premiumExpiresAt is set the moment someone signs up from the
+// pricing page's Premium card (see tenants.ts's premiumExpiresAt) — the
+// one time this gets set automatically rather than by an operator renewing
+// it after confirmed payment.
+const PREMIUM_TRIAL_MONTHS = 2;
 const LOGIN_TICKET_PURPOSE = 'login-ticket';
 // Bounds the "-<n>" disambiguation loop in insertTenantAndMembership /
 // previewCooperativeSlug — astronomically generous for how many
@@ -113,6 +121,8 @@ interface TenantRow {
   name: string;
   slug: string;
   onboardedAt: Date | null;
+  plan: TenantPlan;
+  premiumExpiresAt: Date | null;
 }
 
 interface LoginTicketClaims {
@@ -149,6 +159,7 @@ export class AuthService {
             tx,
             user.id,
             input.tenantName,
+            input.plan,
           );
           return { tenant, user, membership };
         },
@@ -674,6 +685,8 @@ export class AuthService {
         name: tenant.name,
         slug: tenant.slug,
         onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+        plan: tenant.plan,
+        premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
       },
       permissions: membership.permissions,
       cooperatives: await this.listCooperatives(user.id),
@@ -736,8 +749,15 @@ export class AuthService {
     tx: Database | Transaction,
     userId: string,
     name: string,
+    plan: TenantPlan = 'free',
   ): Promise<{ tenant: TenantRow; membership: { permissions: string[] } }> {
     const base = slugify(name);
+    const premiumExpiresAt =
+      plan === 'premium'
+        ? new Date(
+            new Date().setMonth(new Date().getMonth() + PREMIUM_TRIAL_MONTHS),
+          )
+        : null;
 
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
       const candidate = this.slugCandidate(base, attempt);
@@ -748,7 +768,7 @@ export class AuthService {
         return await tx.transaction(async (savepoint) => {
           const [tenant] = await savepoint
             .insert(tenants)
-            .values({ name, slug: candidate })
+            .values({ name, slug: candidate, plan, premiumExpiresAt })
             .returning();
           const [membership] = await savepoint
             .insert(memberships)
@@ -955,11 +975,33 @@ export class AuthService {
       .where(eq(sessions.refreshTokenHash, hashToken(rawRefreshToken)));
   }
 
+  // The one gate every path to a session for a specific tenant goes
+  // through — login, signup, magic-link, invite accept, cooperative
+  // select/switch, and refresh all call this rather than signing their own
+  // tokens, so this is the single place a locked tenant's non-admin
+  // members are kept out (see MAIN.md's multi-tenancy invariant: the
+  // decision belongs with whatever issues the token, not scattered across
+  // every caller). An admin can still get a session while locked — they
+  // need one to read their own data and to see why everything else is
+  // blocked (see AccessTokenGuard, which blocks writes for admins too).
   private async issueSession(
     user: UserRow,
     tenant: TenantRow,
     permissions: string[],
   ): Promise<IssuedSession> {
+    const accessState = getTenantAccessState({
+      plan: tenant.plan,
+      premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
+    });
+    if (
+      accessState.status === 'locked' &&
+      !permissions.includes(PERMISSIONS.TENANT_ADMIN)
+    ) {
+      throw new ForbiddenException(
+        `${tenant.name}'s Premium access has expired. Ask an administrator to renew it.`,
+      );
+    }
+
     const accessToken = await this.jwtService.signAsync(
       { sub: user.id, tenantId: tenant.id, email: user.email, permissions },
       {
@@ -1008,6 +1050,8 @@ export class AuthService {
           name: tenant.name,
           slug: tenant.slug,
           onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+          plan: tenant.plan,
+          premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
         },
         permissions,
         cooperatives,

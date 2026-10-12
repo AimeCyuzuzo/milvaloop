@@ -1,4 +1,4 @@
-import { BarChart3, Coins, History, Home, Settings, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, Building2, Coins, History, Home, Settings, Users, type LucideIcon } from 'lucide-react';
 import { PERMISSIONS, type Permission } from '@milvaloop/types';
 
 export interface NavItem {
@@ -32,6 +32,10 @@ export const NAV_ITEMS: NavItem[] = [
   // it for someone who can't manage it — hidden entirely rather than
   // linking to a page that would just say "ask an admin."
   { label: 'Settings', href: '/settings', icon: Settings, permission: PERMISSIONS.CONTRIBUTIONS_SETTINGS },
+  // No `permission` — the plan a cooperative is on is the same answer for
+  // everyone looking at it, not an admin-only control (see
+  // group-settings/page.tsx); same transparency reasoning as Activity above.
+  { label: 'Group Settings', href: '/group-settings', icon: Building2 },
 ];
 
 // Which nav item's href lights up for a given pathname — shared by the

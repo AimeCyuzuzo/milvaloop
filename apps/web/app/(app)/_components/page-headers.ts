@@ -20,6 +20,7 @@ const PAGE_HEADERS: Record<string, PageHeader> = {
   '/contributions/analytics': { title: 'Analytics', description: 'Every number the ledger can produce, in one place.' },
   '/activity': { title: 'Activity', description: 'Everything that has happened in this cooperative.' },
   '/settings': { title: 'Settings', description: 'Manage the share price.' },
+  '/group-settings': { title: 'Group Settings', description: 'Plan and other cooperative-wide settings.' },
   '/account': { title: 'Account', description: 'Manage your account settings.' },
   '/cooperatives/new': { title: 'Create a cooperative', description: 'Set up a new cooperative under your existing account.' },
 };

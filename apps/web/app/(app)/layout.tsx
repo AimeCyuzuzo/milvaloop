@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { getTenantAccessState } from '@milvaloop/types';
 
 import { Separator } from '@milvaloop/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@milvaloop/ui/sidebar';
@@ -13,6 +14,7 @@ import { useCurrentSessionQuery } from '@/lib/auth/use-current-session';
 import { AppSidebar } from './_components/app-sidebar';
 import { BottomTabBar } from './_components/bottom-tab-bar';
 import { usePageHeader } from './_components/page-headers';
+import { TrialBanner } from './_components/trial-banner';
 
 // No middleware-level gate yet — the access token only ever lives in
 // browser memory (see token-store.ts), so route protection here is a
@@ -73,44 +75,47 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar
-        tenantId={session.tenant.id}
-        tenantName={session.tenant.name}
-        cooperatives={session.cooperatives}
-        name={session.user.name}
-      />
-      <SidebarInset>
-        {/* Sticky and translucent below md — a fixed nav bar riding above
-            scrolling content is the native pattern; above md the sidebar
-            already gives that persistent orientation, so the header stays
-            a plain, static part of the page like before. */}
-        <header className="bg-background/85 supports-[backdrop-filter]:backdrop-blur-md sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-4 md:static md:h-20 md:bg-background md:backdrop-blur-none">
-          {/* Opening the sidebar's own drawer is a desktop/tablet-rail
-              affordance now — below md there's nothing to trigger, the
-              bottom tab bar is the sole nav. */}
-          <SidebarTrigger className="hidden md:flex" />
-          <Separator orientation="vertical" className="hidden h-4 md:block" />
-          {pageHeader ? (
-            <div className="flex min-w-0 flex-col justify-center">
-              <Typography as="h1" variant="h3">
-                {pageHeader.title}
-              </Typography>
-              <Typography variant="muted" className="hidden truncate sm:block">
-                {pageHeader.description}
-              </Typography>
-            </div>
-          ) : null}
-        </header>
-        {/* No max-width here — a data table (Members) needs the room a
-            narrow, form-like page (Dashboard, Account) doesn't. Pages that
-            want the narrower look wrap their own content in max-w-2xl.
-            Extra bottom padding on mobile clears the fixed tab bar (see
-            BottomTabBar) rather than letting a page's last few pixels sit
-            underneath it. */}
-        <main className="flex-1 px-4 pt-8 pb-24 md:pb-8">{children}</main>
-      </SidebarInset>
-      <BottomTabBar />
-    </SidebarProvider>
+    <>
+      <TrialBanner accessState={getTenantAccessState(session.tenant)} />
+      <SidebarProvider>
+        <AppSidebar
+          tenantId={session.tenant.id}
+          tenantName={session.tenant.name}
+          cooperatives={session.cooperatives}
+          name={session.user.name}
+        />
+        <SidebarInset>
+          {/* Sticky and translucent below md — a fixed nav bar riding above
+              scrolling content is the native pattern; above md the sidebar
+              already gives that persistent orientation, so the header stays
+              a plain, static part of the page like before. */}
+          <header className="bg-background/85 supports-[backdrop-filter]:backdrop-blur-md sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-4 md:static md:h-20 md:bg-background md:backdrop-blur-none">
+            {/* Opening the sidebar's own drawer is a desktop/tablet-rail
+                affordance now — below md there's nothing to trigger, the
+                bottom tab bar is the sole nav. */}
+            <SidebarTrigger className="hidden md:flex" />
+            <Separator orientation="vertical" className="hidden h-4 md:block" />
+            {pageHeader ? (
+              <div className="flex min-w-0 flex-col justify-center">
+                <Typography as="h1" variant="h3">
+                  {pageHeader.title}
+                </Typography>
+                <Typography variant="muted" className="hidden truncate sm:block">
+                  {pageHeader.description}
+                </Typography>
+              </div>
+            ) : null}
+          </header>
+          {/* No max-width here — a data table (Members) needs the room a
+              narrow, form-like page (Dashboard, Account) doesn't. Pages that
+              want the narrower look wrap their own content in max-w-2xl.
+              Extra bottom padding on mobile clears the fixed tab bar (see
+              BottomTabBar) rather than letting a page's last few pixels sit
+              underneath it. */}
+          <main className="flex-1 px-4 pt-8 pb-24 md:pb-8">{children}</main>
+        </SidebarInset>
+        <BottomTabBar />
+      </SidebarProvider>
+    </>
   );
 }

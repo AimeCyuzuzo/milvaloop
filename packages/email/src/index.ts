@@ -9,3 +9,4 @@ export * from './templates/magic-link-email.js';
 export * from './templates/member-removed-email.js';
 export * from './templates/monthly-digest-email.js';
 export * from './templates/password-reset-email.js';
+export * from './templates/premium-trial-ending-email.js';
