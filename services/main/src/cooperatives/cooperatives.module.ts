@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { AuthModule } from '../auth/auth.module';
 import { CooperativesController } from './cooperatives.controller';
+import { TenantTrialReminderService } from './tenant-trial-reminders.service';
 
 @Module({
   // JwtModule.register({}) is repeated here (also in AuthModule) because
@@ -14,5 +15,6 @@ import { CooperativesController } from './cooperatives.controller';
   // AuthModule's comment — every sign/verify call passes its own secret).
   imports: [AuthModule, JwtModule.register({})],
   controllers: [CooperativesController],
+  providers: [TenantTrialReminderService],
 })
 export class CooperativesModule {}

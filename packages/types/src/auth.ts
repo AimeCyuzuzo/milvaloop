@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { cooperativeNameSchema, cooperativeSummarySchema } from './tenant.js';
+import { tenantPlanSchema } from './tenant-access.js';
 
 const emailSchema = z.email();
 export const passwordSchema = z.string().min(8, 'Password must be at least 8 characters');
@@ -14,11 +15,15 @@ export const personNameSchema = z.string().min(1).max(255);
 // together (see CODE_QUALITY.md's transaction example). No slug field — the
 // cooperative's address is generated from tenantName, never typed (see
 // tenant.ts's slugify and AuthService.insertTenantAndMembership).
+// `plan` is optional and only ever meaningfully 'premium' when it came from
+// the pricing page's Premium card (see apps/web/app/(public)/pricing/page.tsx)
+// — omitted or 'free' both mean the new tenant starts on the Free plan.
 export const signupSchema = z.object({
   tenantName: cooperativeNameSchema,
   name: personNameSchema,
   email: emailSchema,
   password: passwordSchema,
+  plan: tenantPlanSchema.optional(),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
@@ -93,6 +98,12 @@ export const authSessionSchema = z.object({
     // is null rather than showing the normal dashboard (see
     // apps/web/app/(app)/layout.tsx).
     onboardedAt: z.iso.datetime().nullable(),
+    plan: tenantPlanSchema,
+    // Null on the Free plan. The frontend never computes trial/lockout
+    // state itself from a raw date — it always goes through
+    // getTenantAccessState (see tenant-access.ts) so the banner and the
+    // backend's own enforcement can never disagree.
+    premiumExpiresAt: z.iso.datetime().nullable(),
   }),
   permissions: z.array(z.string()),
   // Every cooperative this user holds a membership in, not just the

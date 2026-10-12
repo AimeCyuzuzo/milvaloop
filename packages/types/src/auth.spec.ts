@@ -84,6 +84,8 @@ describe('loginResultSchema', () => {
         name: 'Coop',
         slug: 'coop',
         onboardedAt: '2024-01-01T00:00:00.000Z',
+        plan: 'free',
+        premiumExpiresAt: null,
       },
       permissions: [],
       cooperatives: [],

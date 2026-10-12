@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from 'next-themes';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { Check, LogOut, Plus } from 'lucide-react';
+import { Building2, Check, LogOut, Plus } from 'lucide-react';
 import { changePasswordSchema, personNameSchema, type ChangePasswordInput } from '@milvaloop/types';
 import { z } from 'zod';
 
@@ -90,6 +90,32 @@ function CooperativeCard() {
             </Button>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// A tenant's plan, and anything else cooperative-wide rather than personal
+// to this member, lives on its own page (see group-settings/page.tsx) — not
+// here, where every other card is scoped to the person looking at it. The
+// sidebar already links there directly (see nav-items.ts); this card exists
+// only because the bottom tab bar has no slot for it (see
+// bottom-tab-bar.tsx), so a mobile visitor needs a way in from somewhere
+// that is reachable.
+function GroupSettingsCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Group Settings</CardTitle>
+        <CardDescription>Plan and other cooperative-wide settings.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline">
+          <Link href="/group-settings">
+            <Building2 />
+            Go to Group Settings
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );
@@ -353,6 +379,7 @@ export default function AccountPage() {
       </Card>
 
       <PreferencesCard />
+      <GroupSettingsCard />
       <CooperativeCard />
       <SignOutCard />
     </div>
