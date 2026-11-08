@@ -10,9 +10,11 @@ interface PostgresErrorLike {
 }
 
 const UNIQUE_VIOLATION = '23505';
+const FOREIGN_KEY_VIOLATION = '23503';
 
-export function isUniqueViolation(
+function isViolation(
   error: unknown,
+  code: string,
   constraintName: string,
 ): boolean {
   const seen = new Set<unknown>();
@@ -27,14 +29,29 @@ export function isUniqueViolation(
   ) {
     seen.add(current);
     const pgError = current as PostgresErrorLike;
-    if (
-      pgError.code === UNIQUE_VIOLATION &&
-      pgError.constraint_name === constraintName
-    ) {
+    if (pgError.code === code && pgError.constraint_name === constraintName) {
       return true;
     }
     current = pgError.cause;
   }
 
   return false;
+}
+
+export function isUniqueViolation(
+  error: unknown,
+  constraintName: string,
+): boolean {
+  return isViolation(error, UNIQUE_VIOLATION, constraintName);
+}
+
+// A delete blocked by a referencing row — e.g. a share price still
+// pinned by a contribution allocation (see contribution-allocations.ts's
+// `onDelete: 'restrict'`). Same shape as isUniqueViolation, checking
+// Postgres's foreign-key-violation code instead.
+export function isForeignKeyViolation(
+  error: unknown,
+  constraintName: string,
+): boolean {
+  return isViolation(error, FOREIGN_KEY_VIOLATION, constraintName);
 }

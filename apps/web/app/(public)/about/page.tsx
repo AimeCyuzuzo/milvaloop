@@ -6,7 +6,7 @@ import { Typography } from '@milvaloop/ui/typography';
 import { siteConfig } from '@/lib/site-config';
 
 const TITLE = 'About';
-const DESCRIPTION = `Why ${siteConfig.name} exists and what we believe a cooperative platform should do.`;
+const DESCRIPTION = `Why ${siteConfig.name} exists and what it does.`;
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -32,24 +32,22 @@ export default function AboutPage() {
 
       <div className="mt-8 space-y-6">
         <Typography variant="muted">
-          Most cooperatives run on a mix of spreadsheets, paper registers, receipts, and WhatsApp
-          messages. It works, until it doesn&apos;t — until someone needs to know how a member&apos;s
-          balance was calculated, whether a payment was approved, or why a decision was made, and the
-          answer only lives in one person&apos;s memory.
+          Most cooperatives track their records using spreadsheets, paper registers, receipts, and
+          WhatsApp messages. This causes problems when someone needs an answer: how a member&apos;s
+          balance was calculated, whether a payment was approved, or why a decision was made. Often,
+          only one person knows the answer.
         </Typography>
         <Typography variant="muted">
-          That&apos;s the problem we set out to fix. Not by digitizing the spreadsheet, but by giving a
-          cooperative a shared operational record — one place where members, contributions, shares,
-          loans, votes, and decisions all live together, with a full history behind every one of them.
+          We built {siteConfig.name} to give a cooperative one shared record. Members, contributions,
+          shares, loans, votes, and decisions are all kept in one place, with a full history behind
+          each one.
         </Typography>
         <Typography variant="muted">
-          The goal isn&apos;t dashboards for their own sake. It&apos;s that anyone on your team should be
-          able to open a record and answer: what happened, who did it, when, why, and what it affected —
-          without asking the treasurer.
+          Anyone on the team can open a record and see what happened, who did it, when, why, and what
+          it affected, without asking the treasurer.
         </Typography>
         <Typography variant="muted">
-          We believe a cooperative that can explain itself is a stronger, more transparent cooperative.
-          That belief shapes everything we build.
+          {siteConfig.name} is built so a cooperative can explain its own records to its own members.
         </Typography>
         <Typography variant="muted">
           {siteConfig.name} is built and operated by{' '}

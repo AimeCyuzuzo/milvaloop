@@ -10,11 +10,27 @@ import { cn } from '@milvaloop/ui/lib/utils';
 // contrast step needs no border at all. `highlighted` is the one deliberate
 // exception — a real accent, not a structural boundary, so it gets its own
 // explicit border rather than inheriting one.
+//
+// The tinted variants (`primary`/`success`/`warning`/`violet`/`sky`) are a
+// wash of an existing semantic token, never a new color — they stay
+// correct in both themes for free, since the token itself is already
+// redefined per theme (see globals.css), and there's no fourth palette to
+// keep in sync if this app's accent colors ever change. `primary` (Navy)
+// is the one tint to reach for carefully: it's markedly lower-chroma than
+// the other four (see globals.css's comment on --primary), so its
+// 25%-wash reads as gray rather than a clear color — prefer one of the
+// others for a card that has no real status/brand tie to primary
+// specifically.
 const cardVariants = cva('text-card-foreground flex flex-col gap-6 rounded-xl py-6', {
   variants: {
     variant: {
       default: 'bg-card',
       highlighted: 'bg-card border border-primary',
+      primary: 'bg-primary/25',
+      success: 'bg-success/25',
+      warning: 'bg-warning/25',
+      violet: 'bg-violet/25',
+      sky: 'bg-sky/25',
     },
   },
   defaultVariants: {
@@ -45,10 +61,27 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div data-slot="card-title" className={cn('leading-none font-semibold', className)} {...props} />
-  );
+// `lg` exists for a card whose whole point is one headline number (a
+// dashboard stat, a count) — the default size reads fine as a section
+// label but disappears next to content meant to be the card's main point.
+const cardTitleVariants = cva('leading-none font-semibold', {
+  variants: {
+    size: {
+      default: '',
+      lg: 'text-2xl',
+    },
+  },
+  defaultVariants: {
+    size: 'default',
+  },
+});
+
+function CardTitle({
+  className,
+  size,
+  ...props
+}: React.ComponentProps<'div'> & VariantProps<typeof cardTitleVariants>) {
+  return <div data-slot="card-title" className={cn(cardTitleVariants({ size }), className)} {...props} />;
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {

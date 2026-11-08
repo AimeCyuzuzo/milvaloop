@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+// z.coerce.boolean() does plain JS truthy coercion (Boolean('false') is
+// true, since any non-empty string is truthy) — wrong for an env var,
+// which always arrives as a string. This only accepts the literal words
+// 'true'/'false', so a typo becomes a validation error at startup instead
+// of silently doing the opposite of what the value said.
+function booleanString(defaultValue: boolean) {
+  return z
+    .enum(['true', 'false'])
+    .default(defaultValue ? 'true' : 'false')
+    .transform((value) => value === 'true');
+}
+
 export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3001),
@@ -10,7 +22,7 @@ export const serverEnvSchema = z.object({
 
   MINIO_ENDPOINT: z.string().min(1),
   MINIO_PORT: z.coerce.number().default(9000),
-  MINIO_USE_SSL: z.coerce.boolean().default(false),
+  MINIO_USE_SSL: booleanString(false),
   MINIO_ACCESS_KEY: z.string().min(1),
   MINIO_SECRET_KEY: z.string().min(1),
   MINIO_BUCKET: z.string().min(1).default('milvaloop'),
@@ -18,6 +30,15 @@ export const serverEnvSchema = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_FROM: z.string().min(1).default('MilvaLoop <no-reply@milvaloop.local>'),
+  // Mailpit needs neither (dev-only, no real mail server behind it) — every
+  // real SMTP provider does, so these stay optional rather than required,
+  // and the mailer only authenticates when both are actually set.
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  // Implicit TLS (port 465) vs. STARTTLS (587, negotiated after connecting
+  // in plaintext) — nodemailer's own `secure` flag distinguishes them, and
+  // most providers (Resend included) expect STARTTLS, hence the default.
+  SMTP_SECURE: booleanString(false),
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),

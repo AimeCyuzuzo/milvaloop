@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,26 +12,40 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
   acceptInviteSchema,
+  addPlaceholderMemberSchema,
+  inviteLoginSchema,
   inviteMemberSchema,
   inviteTokenParamSchema,
+  memberImportMappingSchema,
   membershipIdParamSchema,
   membershipInviteIdParamSchema,
+  updateDigestPauseSchema,
   updateMemberPermissionsSchema,
+  updateReminderPauseSchema,
   PERMISSIONS,
   type AcceptInviteInput,
+  type AddPlaceholderMemberInput,
+  type InviteLoginInput,
   type InviteMemberInput,
   type InviteTokenParam,
   type LoginResult,
+  type MemberImportMapping,
   type MembershipIdParam,
   type MembershipInviteIdParam,
+  type UpdateDigestPauseInput,
   type UpdateMemberPermissionsInput,
+  type UpdateReminderPauseInput,
 } from '@milvaloop/types';
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -40,6 +55,27 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { MembersService } from './members.service';
+
+// The multipart mapping field arrives as a JSON-encoded string (multer
+// only ever gives non-file fields as plain strings) — this parses it and
+// then validates the result against the real mapping schema, so
+// ZodValidationPipe still does the actual validation work rather than a
+// second, separate check.
+const mappingJsonSchema = z
+  .string()
+  .transform((value, ctx) => {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'mapping must be valid JSON' });
+      return z.NEVER;
+    }
+  })
+  .pipe(memberImportMappingSchema);
+
+// 5 MB is generous for a member list — real cooperatives here are dozens
+// of rows, not thousands.
+const IMPORT_FILE_SIZE_LIMIT = 5 * 1024 * 1024;
 
 @Controller('members')
 export class MembersController {
@@ -66,6 +102,87 @@ export class MembersController {
     @Body(new ZodValidationPipe(inviteMemberSchema)) body: InviteMemberInput,
   ) {
     return this.membersService.invite(claims.tenantId, claims.sub, body);
+  }
+
+  // Same permission as an email invite — this is the "no email" way to
+  // add someone, not a different kind of action.
+  @Post('placeholder')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MEMBERS_INVITE)
+  async addPlaceholderMember(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Body(new ZodValidationPipe(addPlaceholderMemberSchema))
+    body: AddPlaceholderMemberInput,
+  ) {
+    await this.membersService.addPlaceholderMember(
+      claims.tenantId,
+      claims.sub,
+      body,
+    );
+  }
+
+  // Sends a real email — same throttle tier as `invite` above, same reason.
+  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
+  @Post(':membershipId/invite-login')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MEMBERS_INVITE)
+  async inviteLogin(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(membershipIdParamSchema))
+    params: MembershipIdParam,
+    @Body(new ZodValidationPipe(inviteLoginSchema)) body: InviteLoginInput,
+  ) {
+    await this.membersService.inviteLoginForPlaceholder(
+      claims.tenantId,
+      params.membershipId,
+      claims.sub,
+      body.email,
+    );
+  }
+
+  @Post('import/preview')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MEMBERS_INVITE)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: IMPORT_FILE_SIZE_LIMIT } }),
+  )
+  async previewImport(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file was uploaded');
+    }
+    return this.membersService.previewImport(file.buffer);
+  }
+
+  // Sends a real email per invited row — same throttle tier as `invite`,
+  // multiplied by however many rows in one spreadsheet actually have an
+  // email column, which for this product's scale is still well under the
+  // limit in one sitting.
+  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MEMBERS_INVITE)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: IMPORT_FILE_SIZE_LIMIT } }),
+  )
+  async importMembers(
+    @CurrentUser() claims: AccessTokenClaims,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('mapping', new ZodValidationPipe(mappingJsonSchema))
+    mapping: MemberImportMapping,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file was uploaded');
+    }
+    return this.membersService.importMembers(
+      claims.tenantId,
+      claims.sub,
+      file.buffer,
+      mapping,
+    );
   }
 
   @Post('invites/:id/revoke')
@@ -100,6 +217,48 @@ export class MembersController {
       claims.sub,
       params.membershipId,
       body.permissions,
+    );
+  }
+
+  // A personal preference, not an admin-gated action — any active member
+  // may call this for their own membershipId; the service rejects it for
+  // any other (see MembersService.updateReminderPause), so there's
+  // nothing for PermissionsGuard to check here.
+  @Patch(':membershipId/reminders')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  async updateReminderPause(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(membershipIdParamSchema))
+    params: MembershipIdParam,
+    @Body(new ZodValidationPipe(updateReminderPauseSchema))
+    body: UpdateReminderPauseInput,
+  ) {
+    await this.membersService.updateReminderPause(
+      claims.tenantId,
+      claims.sub,
+      params.membershipId,
+      body.paused,
+    );
+  }
+
+  // Same self-only shape as updateReminderPause above, but for the
+  // monthly digest (see MembersService.updateDigestPause).
+  @Patch(':membershipId/digest')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
+  async updateDigestPause(
+    @CurrentUser() claims: AccessTokenClaims,
+    @Param(new ZodValidationPipe(membershipIdParamSchema))
+    params: MembershipIdParam,
+    @Body(new ZodValidationPipe(updateDigestPauseSchema))
+    body: UpdateDigestPauseInput,
+  ) {
+    await this.membersService.updateDigestPause(
+      claims.tenantId,
+      claims.sub,
+      params.membershipId,
+      body.paused,
     );
   }
 

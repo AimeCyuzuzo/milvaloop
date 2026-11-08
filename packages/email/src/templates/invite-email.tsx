@@ -3,15 +3,15 @@ import { EmailButton, EmailLayout } from './layout.js';
 
 export interface InviteEmailProps {
   tenantName: string;
-  invitedByEmail: string;
+  invitedByName: string;
   acceptUrl: string;
 }
 
-function InviteEmail({ tenantName, invitedByEmail, acceptUrl }: InviteEmailProps) {
+function InviteEmail({ tenantName, invitedByName, acceptUrl }: InviteEmailProps) {
   return (
     <EmailLayout previewText={`You've been invited to join ${tenantName} on MilvaLoop`}>
       <p style={{ fontSize: 14, color: EMAIL_COLORS.ink, margin: '0 0 8px' }}>
-        <strong>{invitedByEmail}</strong> has invited you to join <strong>{tenantName}</strong> on MilvaLoop.
+        <strong>{invitedByName}</strong> has invited you to join <strong>{tenantName}</strong> on MilvaLoop.
       </p>
       <EmailButton href={acceptUrl}>Accept invite</EmailButton>
       <p style={{ fontSize: 12, color: EMAIL_COLORS.muted, margin: 0 }}>

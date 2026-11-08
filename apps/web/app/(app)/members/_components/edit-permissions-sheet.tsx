@@ -53,7 +53,7 @@ export function EditPermissionsSheet({
     setError(null);
     try {
       await update.mutateAsync({ membershipId: member.membershipId, permissions });
-      toast.success(`Updated permissions for ${member.email}.`);
+      toast.success(`Updated permissions for ${member.name}.`);
       onOpenChange(false);
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -65,7 +65,9 @@ export function EditPermissionsSheet({
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Edit permissions</SheetTitle>
-          <SheetDescription>{member.email}</SheetDescription>
+          <SheetDescription>
+            {member.name} ({member.email})
+          </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4">
           {error ? (

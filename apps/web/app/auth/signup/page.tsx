@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { signupSchema, type SignupInput } from '@milvaloop/types';
+import { signupSchema, type SignupInput, type TenantPlan } from '@milvaloop/types';
 
 import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
@@ -22,16 +22,21 @@ export default function SignupPage() {
   const router = useRouter();
   const signup = useSignupMutation();
   const [formError, setFormError] = useState<string | null>(null);
+  // Only ever set by the pricing page's Premium card (see
+  // apps/web/app/(public)/pricing/page.tsx) — anything else in the query
+  // string just means a plain Free signup, same as no param at all.
+  const requestedPlan: TenantPlan | undefined =
+    useSearchParams().get('plan') === 'premium' ? 'premium' : undefined;
 
   const form = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { tenantName: '', email: '', password: '' },
+    defaultValues: { tenantName: '', name: '', email: '', password: '' },
   });
 
   async function onSubmit(values: SignupInput) {
     setFormError(null);
     try {
-      await signup.mutateAsync(values);
+      await signup.mutateAsync({ ...values, plan: requestedPlan });
       toast.success('Account created — check your email to verify it.');
       router.push('/dashboard');
     } catch (error) {
@@ -46,7 +51,11 @@ export default function SignupPage() {
     <Card>
       <CardHeader>
         <CardTitle>Create your cooperative</CardTitle>
-        <CardDescription>Set up MilvaLoop for your group in a couple of minutes.</CardDescription>
+        <CardDescription>
+          {requestedPlan === 'premium'
+            ? 'Set up MilvaLoop and start your free 2-month Premium trial.'
+            : 'Set up MilvaLoop for your group in a couple of minutes.'}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {formError ? (
@@ -72,6 +81,19 @@ export default function SignupPage() {
               )}
             />
             <CooperativeSlugPreview name={form.watch('tenantName')} />
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Your name</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="email"

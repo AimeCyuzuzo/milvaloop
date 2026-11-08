@@ -1,12 +1,13 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { and, eq, gt, schema, type Database } from '@milvaloop/db';
+import { and, eq, gt, isNull, schema, type Database } from '@milvaloop/db';
 import {
   EmailVerificationEmail,
   MagicLinkEmail,
@@ -15,6 +16,7 @@ import {
   type Mailer,
 } from '@milvaloop/email';
 import {
+  getTenantAccessState,
   isReservedSlug,
   PERMISSIONS,
   slugify,
@@ -32,10 +34,13 @@ import {
   type SignupInput,
   type SlugPreviewResult,
   type SwitchCooperativeInput,
+  type TenantPlan,
+  type UpdateProfileInput,
 } from '@milvaloop/types';
 import * as argon2 from 'argon2';
 
 import { isUniqueViolation } from '../common/db-errors';
+import { todayIsoDate } from '../common/dates';
 import { env } from '../config/env';
 import { DATABASE_CONNECTION } from '../db/db.module';
 import type { Transaction } from '../db/types';
@@ -66,6 +71,11 @@ const PASSWORD_RESET_TTL = '1h';
 // this never leaves the browser (unlike magic-link/reset, it's never
 // emailed), so there's no reason to extend it further.
 const LOGIN_TICKET_TTL = '5m';
+// How far out premiumExpiresAt is set the moment someone signs up from the
+// pricing page's Premium card (see tenants.ts's premiumExpiresAt) — the
+// one time this gets set automatically rather than by an operator renewing
+// it after confirmed payment.
+const PREMIUM_TRIAL_MONTHS = 2;
 const LOGIN_TICKET_PURPOSE = 'login-ticket';
 // Bounds the "-<n>" disambiguation loop in insertTenantAndMembership /
 // previewCooperativeSlug — astronomically generous for how many
@@ -99,15 +109,20 @@ export type LoginOutcome =
 
 interface UserRow {
   id: string;
+  name: string;
   email: string;
   passwordHash: string;
   emailVerifiedAt: Date | null;
+  claimedAt: Date | null;
 }
 
 interface TenantRow {
   id: string;
   name: string;
   slug: string;
+  onboardedAt: Date | null;
+  plan: TenantPlan;
+  premiumExpiresAt: Date | null;
 }
 
 interface LoginTicketClaims {
@@ -133,12 +148,18 @@ export class AuthService {
         async (tx) => {
           const [user] = await tx
             .insert(users)
-            .values({ email: input.email, passwordHash })
+            .values({
+              name: input.name,
+              email: input.email,
+              passwordHash,
+              claimedAt: new Date(),
+            })
             .returning();
           const { tenant, membership } = await this.insertTenantAndMembership(
             tx,
             user.id,
             input.tenantName,
+            input.plan,
           );
           return { tenant, user, membership };
         },
@@ -177,7 +198,12 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member (see users.ts's claimedAt) has no real password
+    // — its hash is a random, discarded value nobody can know — so this
+    // would already fail below regardless; checked explicitly anyway
+    // rather than relying on that alone, and with the exact same generic
+    // message so it reveals nothing about the account's state.
+    if (!user || !user.claimedAt) {
       throw invalidCredentials();
     }
 
@@ -258,7 +284,11 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // A placeholder member's email is synthetic and known to nobody, so
+    // this path is never realistically reached for one — guarded anyway,
+    // and with the same silent return an unknown email gets, so it can
+    // never distinguish "no account" from "not claimed yet".
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -390,7 +420,8 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, input.email))
       .limit(1);
-    if (!user) {
+    // Same reasoning as requestMagicLink above.
+    if (!user || !user.claimedAt) {
       return;
     }
 
@@ -503,6 +534,19 @@ export class AuthService {
     await this.revokeAllSessions(user.id);
   }
 
+  // A display name is a low-stakes profile field, not a security
+  // credential — no current-value confirmation needed the way a password
+  // change requires one, and it doesn't revoke other sessions.
+  async updateProfile(
+    claims: AccessTokenClaims,
+    input: UpdateProfileInput,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ name: input.name })
+      .where(eq(users.id, claims.sub));
+  }
+
   async selectCooperative(
     input: SelectCooperativeInput,
   ): Promise<IssuedSession> {
@@ -519,6 +563,7 @@ export class AuthService {
         and(
           eq(memberships.userId, userId),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -569,6 +614,7 @@ export class AuthService {
         and(
           eq(memberships.userId, claims.sub),
           eq(memberships.tenantId, input.cooperativeId),
+          isNull(memberships.removedAt),
         ),
       )
       .limit(1);
@@ -605,6 +651,19 @@ export class AuthService {
     return this.issueSession(user, tenant, membership.permissions);
   }
 
+  // Marks the active tenant's guided setup wizard done — the frontend
+  // gates the whole app behind this being non-null (see
+  // apps/web/app/(app)/layout.tsx). The `isNull` guard makes a repeat call
+  // a harmless no-op rather than an error, since "finish setup" is a
+  // button a founder could plausibly press twice (a slow network retry, a
+  // double click) without that being a real problem.
+  async completeOnboarding(tenantId: string): Promise<void> {
+    await this.db
+      .update(tenants)
+      .set({ onboardedAt: new Date() })
+      .where(and(eq(tenants.id, tenantId), isNull(tenants.onboardedAt)));
+  }
+
   async getCurrentSession(claims: AccessTokenClaims): Promise<CurrentSession> {
     const { tenant, user, membership } = await this.loadSessionContext(
       claims.sub,
@@ -617,10 +676,18 @@ export class AuthService {
     return {
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
         emailVerified: !!user.emailVerifiedAt,
       },
-      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+        plan: tenant.plan,
+        premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
+      },
       permissions: membership.permissions,
       cooperatives: await this.listCooperatives(user.id),
     };
@@ -638,7 +705,9 @@ export class AuthService {
       .select({ tenant: tenants, membership: memberships })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, user.id));
+      .where(
+        and(eq(memberships.userId, user.id), isNull(memberships.removedAt)),
+      );
 
     if (rows.length === 1) {
       const { tenant, membership } = rows[0];
@@ -680,8 +749,15 @@ export class AuthService {
     tx: Database | Transaction,
     userId: string,
     name: string,
+    plan: TenantPlan = 'free',
   ): Promise<{ tenant: TenantRow; membership: { permissions: string[] } }> {
     const base = slugify(name);
+    const premiumExpiresAt =
+      plan === 'premium'
+        ? new Date(
+            new Date().setMonth(new Date().getMonth() + PREMIUM_TRIAL_MONTHS),
+          )
+        : null;
 
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
       const candidate = this.slugCandidate(base, attempt);
@@ -692,7 +768,7 @@ export class AuthService {
         return await tx.transaction(async (savepoint) => {
           const [tenant] = await savepoint
             .insert(tenants)
-            .values({ name, slug: candidate })
+            .values({ name, slug: candidate, plan, premiumExpiresAt })
             .returning();
           const [membership] = await savepoint
             .insert(memberships)
@@ -700,6 +776,7 @@ export class AuthService {
               userId,
               tenantId: tenant.id,
               permissions: [PERMISSIONS.TENANT_ADMIN],
+              memberSince: todayIsoDate(),
             })
             .returning();
           return { tenant, membership };
@@ -755,7 +832,9 @@ export class AuthService {
       .select({ tenant: tenants })
       .from(memberships)
       .innerJoin(tenants, eq(memberships.tenantId, tenants.id))
-      .where(eq(memberships.userId, userId));
+      .where(
+        and(eq(memberships.userId, userId), isNull(memberships.removedAt)),
+      );
     return rows.map(({ tenant }) => ({
       id: tenant.id,
       name: tenant.name,
@@ -844,6 +923,13 @@ export class AuthService {
     });
   }
 
+  // Backs refresh() and getCurrentSession() — the two places a session
+  // gets re-validated after it was first issued. Filtering removedAt here
+  // (not just at login) is what actually makes removal take effect for
+  // someone already signed in: their session keeps working off its
+  // current access token until that expires, then the next refresh (or
+  // the next GET /auth/me) finds no active membership and ends it, the
+  // same way an already-revoked session or a deleted account does.
   private async loadSessionContext(userId: string, tenantId: string) {
     const [tenant] = await this.db
       .select()
@@ -859,7 +945,11 @@ export class AuthService {
       .select()
       .from(memberships)
       .where(
-        and(eq(memberships.userId, userId), eq(memberships.tenantId, tenantId)),
+        and(
+          eq(memberships.userId, userId),
+          eq(memberships.tenantId, tenantId),
+          isNull(memberships.removedAt),
+        ),
       )
       .limit(1);
 
@@ -885,11 +975,33 @@ export class AuthService {
       .where(eq(sessions.refreshTokenHash, hashToken(rawRefreshToken)));
   }
 
+  // The one gate every path to a session for a specific tenant goes
+  // through — login, signup, magic-link, invite accept, cooperative
+  // select/switch, and refresh all call this rather than signing their own
+  // tokens, so this is the single place a locked tenant's non-admin
+  // members are kept out (see MAIN.md's multi-tenancy invariant: the
+  // decision belongs with whatever issues the token, not scattered across
+  // every caller). An admin can still get a session while locked — they
+  // need one to read their own data and to see why everything else is
+  // blocked (see AccessTokenGuard, which blocks writes for admins too).
   private async issueSession(
     user: UserRow,
     tenant: TenantRow,
     permissions: string[],
   ): Promise<IssuedSession> {
+    const accessState = getTenantAccessState({
+      plan: tenant.plan,
+      premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
+    });
+    if (
+      accessState.status === 'locked' &&
+      !permissions.includes(PERMISSIONS.TENANT_ADMIN)
+    ) {
+      throw new ForbiddenException(
+        `${tenant.name}'s Premium access has expired. Ask an administrator to renew it.`,
+      );
+    }
+
     const accessToken = await this.jwtService.signAsync(
       { sub: user.id, tenantId: tenant.id, email: user.email, permissions },
       {
@@ -929,10 +1041,18 @@ export class AuthService {
         accessToken,
         user: {
           id: user.id,
+          name: user.name,
           email: user.email,
           emailVerified: !!user.emailVerifiedAt,
         },
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          onboardedAt: tenant.onboardedAt?.toISOString() ?? null,
+          plan: tenant.plan,
+          premiumExpiresAt: tenant.premiumExpiresAt?.toISOString() ?? null,
+        },
         permissions,
         cooperatives,
       },

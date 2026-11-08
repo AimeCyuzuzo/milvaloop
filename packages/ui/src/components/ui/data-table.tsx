@@ -9,17 +9,23 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type Row,
+  type RowSelectionState,
   type SortingState,
   type Table as TanstackTable,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@milvaloop/ui/button';
+import { Checkbox } from '@milvaloop/ui/checkbox';
 import { Input } from '@milvaloop/ui/input';
+import { cn } from '@milvaloop/ui/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@milvaloop/ui/table';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+
+const SELECT_COLUMN_ID = 'select';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -36,36 +42,74 @@ interface DataTableProps<TData, TValue> {
   filters?: React.ReactNode;
   /** Rows per page to start on. Defaults to 10. */
   pageSize?: number;
+  /** A stable identity for a row, used as the row-selection key. Required
+   * whenever `selectionActions` is passed — falls back to array index
+   * otherwise, which is only safe for a table that never enables selection
+   * (an index is meaningless once rows are sorted, filtered, or paged). */
+  getRowId?: (row: TData) => string;
+  /**
+   * Turns on a checkbox column and renders this in a floating bar once at
+   * least one row is selected — "approve these", "reject these", etc.
+   * `clearSelection` lets the caller reset the checkboxes once its action
+   * completes. Selection state lives here, not per call site, for the same
+   * reason sorting/filtering do: one table, one place that owns it.
+   */
+  selectionActions?: (selectedRows: TData[], clearSelection: () => void) => React.ReactNode;
+  /**
+   * Renders each row as a stacked card below the `md` breakpoint instead
+   * of the table's own horizontally-scrolling row — for a table whose
+   * columns don't meaningfully fit a phone width (several always-visible
+   * columns, a wide badge list, ...). The table itself is unchanged at
+   * `md`+; this only replaces what a narrower screen sees, using the same
+   * sorted/filtered/paginated row set either way. Receives the full
+   * TanStack `Row`, not just its data, so a card can still show a
+   * selection checkbox or any other row-level state if it needs to.
+   */
+  mobileCard?: (row: Row<TData>) => React.ReactNode;
 }
 
-// Sorting, a single global text filter, and pagination — the three things
-// every real table in this product needs (member lists, contribution
-// history, audit logs) — wired once here via TanStack Table's headless
-// hooks instead of re-hand-rolling pagination math per feature. Per-column
-// filters/faceted filters/row selection aren't included; add them here
-// (not per call site) once a second table actually needs one.
+// Sorting, a single global text filter, pagination, and (opt-in) row
+// selection — what every real table in this product needs (member lists,
+// contribution history, audit logs) — wired once here via TanStack Table's
+// headless hooks instead of re-hand-rolling this per feature. Per-column/
+// faceted filters aren't included; add them here (not per call site) once
+// a table actually needs one.
 export function DataTable<TData, TValue>({
   columns,
   data,
   filterPlaceholder,
   filters,
   pageSize = 10,
+  getRowId,
+  selectionActions,
+  mobileCard,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+  const tableColumns = React.useMemo(
+    () => (selectionActions ? [buildSelectColumn<TData, TValue>(), ...columns] : columns),
+    [columns, selectionActions],
+  );
 
   const table = useReactTable({
     data,
-    columns,
-    state: { sorting, globalFilter },
+    columns: tableColumns,
+    getRowId: getRowId ?? ((_row, index) => String(index)),
+    state: { sorting, globalFilter, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: Boolean(selectionActions),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize } },
   });
+
+  const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,10 +127,20 @@ export function DataTable<TData, TValue>({
         </div>
       ) : null}
 
+      {mobileCard ? (
+        <div className="flex flex-col gap-3 md:hidden">
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => <React.Fragment key={row.id}>{mobileCard(row)}</React.Fragment>)
+          ) : (
+            <p className="text-muted-foreground py-8 text-center text-sm">No results.</p>
+          )}
+        </div>
+      ) : null}
+
       {/* No outer card/ring here — the table sits directly on the page,
           the tinted header row is its own visual boundary. overflow-hidden
           only exists so that tint's corners clip to the radius below. */}
-      <div className="overflow-hidden rounded-xl">
+      <div className={cn('overflow-hidden rounded-xl', mobileCard && 'hidden md:block')}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -122,7 +176,7 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="group">
+                <TableRow key={row.id} className="group" data-state={row.getIsSelected() ? 'selected' : undefined}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -130,7 +184,7 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-muted-foreground h-24 text-center">
+                <TableCell colSpan={tableColumns.length} className="text-muted-foreground h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -140,8 +194,46 @@ export function DataTable<TData, TValue>({
       </div>
 
       <DataTablePagination table={table} />
+
+      {selectionActions && selectedRows.length > 0 ? (
+        // bottom-24 (not bottom-6) below md clears the fixed mobile bottom
+        // tab bar — same clearance the page's own <main> already reserves.
+        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4 md:bottom-6">
+          {selectionActions(selectedRows, () => setRowSelection({}))}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function buildSelectColumn<TData, TValue>(): ColumnDef<TData, TValue> {
+  return {
+    id: SELECT_COLUMN_ID,
+    enableSorting: false,
+    // A bare Checkbox is a real 16px box with nothing to grow its tap
+    // target — fine where one sits next to its own clickable Label (a
+    // permissions form, say), but there's no label here to lean on. Sized
+    // up directly, as a real child of the cell rather than behind a
+    // wrapper div, so table.tsx's own `[&>[role=checkbox]]` alignment rule
+    // still applies — a wrapper would put a `div` between the cell and
+    // the checkbox and silently break it.
+    header: ({ table }) => (
+      <Checkbox
+        className="size-5"
+        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+        onCheckedChange={(checked) => table.toggleAllPageRowsSelected(Boolean(checked))}
+        aria-label="Select all rows on this page"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        className="size-5"
+        checked={row.getIsSelected()}
+        onCheckedChange={(checked) => row.toggleSelected(Boolean(checked))}
+        aria-label="Select row"
+      />
+    ),
+  };
 }
 
 function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) {

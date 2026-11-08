@@ -14,40 +14,38 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@milvaloop/ui/sidebar';
-import { Typography } from '@milvaloop/ui/typography';
 
 import { AccountMenu } from './account-menu';
 import { CooperativeSwitcher } from './cooperative-switcher';
+import { getActiveHref } from './nav-items';
 import { useVisibleNavItems } from './use-visible-nav-items';
 
 export function AppSidebar({
   tenantId,
   tenantName,
   cooperatives,
-  email,
+  name,
 }: {
   tenantId: string;
   tenantName: string;
   cooperatives: CooperativeSummary[];
-  email: string;
+  name: string;
 }) {
   const pathname = usePathname();
   const navItems = useVisibleNavItems();
 
+  const activeHref = getActiveHref(navItems, pathname);
+
   return (
     <Sidebar>
       <SidebarHeader>
-        {cooperatives.length > 1 ? (
-          <CooperativeSwitcher currentTenantId={tenantId} cooperatives={cooperatives} />
-        ) : (
-          <Typography variant="large">{tenantName}</Typography>
-        )}
+        <CooperativeSwitcher currentTenantId={tenantId} currentTenantName={tenantName} cooperatives={cooperatives} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
             {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = item.href === activeHref;
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive}>
@@ -63,7 +61,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <AccountMenu email={email} />
+        <AccountMenu name={name} />
       </SidebarFooter>
     </Sidebar>
   );

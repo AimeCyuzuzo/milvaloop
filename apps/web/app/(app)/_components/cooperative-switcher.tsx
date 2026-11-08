@@ -1,48 +1,85 @@
 'use client';
 
 import Link from 'next/link';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import type { CooperativeSummary } from '@milvaloop/types';
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@milvaloop/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@milvaloop/ui/dropdown-menu';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@milvaloop/ui/sidebar';
 
+import { getErrorMessage } from '@/lib/api/api-fetch';
 import { useSwitchCooperativeMutation } from '@/lib/auth/use-auth-mutations';
 
-// Only rendered when the caller belongs to more than one cooperative (see
-// AppLayout) — the list rides along on the session payload already loaded
-// on every authenticated page, so no extra request is needed to show it.
+// One dropdown covers both switching and creating — mirrors AccountMenu's
+// shape at the bottom of the sidebar rather than a Select next to a
+// separate link, so there's a single control for "which cooperative,"
+// not two. Always rendered, even with a single cooperative, since creating
+// a second one needs to be reachable from here regardless of how many
+// exist already.
 export function CooperativeSwitcher({
   currentTenantId,
+  currentTenantName,
   cooperatives,
 }: {
   currentTenantId: string;
+  currentTenantName: string;
   cooperatives: CooperativeSummary[];
 }) {
+  const { isMobile } = useSidebar();
   const switchCooperative = useSwitchCooperativeMutation();
 
-  function handleChange(cooperativeId: string) {
+  async function handleSelect(cooperativeId: string) {
     if (cooperativeId === currentTenantId) {
       return;
     }
-    switchCooperative.mutate({ cooperativeId });
+    try {
+      await switchCooperative.mutateAsync({ cooperativeId });
+      // A full reload, not a client-side navigation. Every mounted
+      // component's in-memory state — every query's cached data, every
+      // page's local state — belongs to the cooperative just left; a
+      // client-side cache clear doesn't reliably force an already-mounted
+      // component to refetch. Reloading throws all of it away outright and
+      // starts clean, which is the only thing that actually guarantees it.
+      // The refresh cookie is already rotated to the new tenant (see
+      // AuthService.switchCooperative), so re-authenticating on the way
+      // back in resolves to the new cooperative, not the old one.
+      window.location.href = '/dashboard';
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Select value={currentTenantId} onValueChange={handleChange} disabled={switchCooperative.isPending}>
-        <SelectTrigger size="sm" aria-label="Switch cooperative">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {cooperatives.map((cooperative) => (
-            <SelectItem key={cooperative.id} value={cooperative.id}>
-              {cooperative.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Link href="/cooperatives/new" className="text-muted-foreground text-sm underline-offset-4 hover:underline">
-        Add cooperative
-      </Link>
-    </div>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton size="lg" disabled={switchCooperative.isPending}>
+              <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+                {currentTenantName.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">{currentTenantName}</span>
+              <ChevronsUpDown className="ml-auto size-4" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side={isMobile ? 'bottom' : 'right'} align="start">
+            {cooperatives.map((cooperative) => (
+              <DropdownMenuItem key={cooperative.id} onSelect={() => handleSelect(cooperative.id)}>
+                <span className="min-w-0 flex-1 truncate">{cooperative.name}</span>
+                {cooperative.id === currentTenantId ? <Check /> : null}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/cooperatives/new">
+                <Plus />
+                Create a cooperative
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }

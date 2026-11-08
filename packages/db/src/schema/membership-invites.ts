@@ -24,6 +24,16 @@ export const membershipInvites = pgTable(
     invitedByUserId: uuid('invited_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Set only when this invite is "attach a real login to an existing
+    // placeholder member," never for a normal invite (which always
+    // creates a brand-new user on accept). Accepting a claim invite
+    // updates this user row in place — name, email, password, claimedAt —
+    // instead of inserting a new one, so the membership it already
+    // belongs to, and everything that already references it, is
+    // untouched.
+    claimUserId: uuid('claim_user_id').references(() => users.id, {
+      onDelete: 'cascade',
+    }),
     tokenHash: varchar('token_hash', { length: 255 }).notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     // Also the revoke marker, not just the accept marker — an invite an

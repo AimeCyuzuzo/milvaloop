@@ -10,6 +10,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [PERMISSIONS.MEMBERS_INVITE]: 'Invite members',
   [PERMISSIONS.MEMBERS_EDIT]: 'Edit member permissions',
   [PERMISSIONS.MEMBERS_REMOVE]: 'Remove members',
+  [PERMISSIONS.CONTRIBUTIONS_RECORD]: 'Record contributions',
+  [PERMISSIONS.CONTRIBUTIONS_APPROVE]: 'Approve contributions',
+  [PERMISSIONS.CONTRIBUTIONS_SETTINGS]: 'Manage share price',
 };
 
 // Permissions arrive over the wire as `string[]` (see @milvaloop/types'

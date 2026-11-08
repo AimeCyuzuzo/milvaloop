@@ -14,6 +14,7 @@ import {
 
 const validSignup = {
   tenantName: 'Umurenge Savings Group',
+  name: 'Founder Person',
   email: 'founder@example.com',
   password: 'correct-horse-battery',
 };
@@ -77,8 +78,15 @@ describe('loginResultSchema', () => {
     const result = loginResultSchema.safeParse({
       status: 'authenticated',
       accessToken: 'token',
-      user: { id: '11111111-1111-4111-8111-111111111111', email: 'a@example.com', emailVerified: false },
-      tenant: { id: '11111111-1111-4111-8111-111111111111', name: 'Coop', slug: 'coop' },
+      user: { id: '11111111-1111-4111-8111-111111111111', name: 'A Person', email: 'a@example.com', emailVerified: false },
+      tenant: {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Coop',
+        slug: 'coop',
+        onboardedAt: '2024-01-01T00:00:00.000Z',
+        plan: 'free',
+        premiumExpiresAt: null,
+      },
       permissions: [],
       cooperatives: [],
     });

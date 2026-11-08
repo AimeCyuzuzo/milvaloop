@@ -10,14 +10,13 @@ import { Alert, AlertDescription } from '@milvaloop/ui/alert';
 import { Button } from '@milvaloop/ui/button';
 import { Checkbox } from '@milvaloop/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@milvaloop/ui/dialog';
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@milvaloop/ui/responsive-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@milvaloop/ui/form';
 import { Input } from '@milvaloop/ui/input';
 import { Label } from '@milvaloop/ui/label';
@@ -27,8 +26,7 @@ import { useInviteMemberMutation } from '@/lib/members/use-members-mutations';
 
 import { PERMISSION_LABELS } from './permission-labels';
 
-export function InviteMemberDialog() {
-  const [open, setOpen] = useState(false);
+export function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [formError, setFormError] = useState<string | null>(null);
   const invite = useInviteMemberMutation();
 
@@ -42,7 +40,7 @@ export function InviteMemberDialog() {
     try {
       await invite.mutateAsync(values);
       toast.success(`Invite sent to ${values.email}.`);
-      setOpen(false);
+      onOpenChange(false);
       form.reset();
     } catch (error) {
       const message = applyServerError(form, error);
@@ -53,24 +51,21 @@ export function InviteMemberDialog() {
   }
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
-        setOpen(next);
+        onOpenChange(next);
         if (!next) {
           setFormError(null);
           form.reset();
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button>Invite member</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite a member</DialogTitle>
-          <DialogDescription>They&rsquo;ll get an email with a link to join.</DialogDescription>
-        </DialogHeader>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Invite a member</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>They&rsquo;ll get an email with a link to join.</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {formError ? (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
@@ -128,14 +123,14 @@ export function InviteMemberDialog() {
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Sending invite…' : 'Send invite'}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
